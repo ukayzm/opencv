@@ -15,8 +15,8 @@ def faceDetect():
         print('Fail to load camera')
         return
 
-    cap.set(3, 480)
-    cap.set(4, 320)
+    #cap.set(3, 480)
+    #cap.set(4, 320)
 
     while True:
         ret, frame = cap.read()
@@ -50,7 +50,7 @@ def faceDetect():
             break
 
     cap.release()
-    cv2.destoryAllWindows()
+    cv2.destroyAllWindows()
 
 faceDetect()
 
