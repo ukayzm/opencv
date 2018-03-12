@@ -1,7 +1,7 @@
 # live_streaming.py
 
 from flask import Flask, render_template, Response
-from camera import VideoCamera
+import face_recog
 
 app = Flask(__name__)
 
@@ -9,15 +9,15 @@ app = Flask(__name__)
 def index():
     return render_template('index.html')
 
-def gen(camera):
+def gen(fr):
     while True:
-        jpg_bytes = camera.get_jpg_bytes()
+        jpg_bytes = fr.get_jpg_bytes()
         yield (b'--frame\r\n'
                b'Content-Type: image/jpeg\r\n\r\n' + jpg_bytes + b'\r\n\r\n')
 
 @app.route('/video_feed')
 def video_feed():
-    return Response(gen(VideoCamera()),
+    return Response(gen(face_recog.FaceRecog()),
                     mimetype='multipart/x-mixed-replace; boundary=frame')
 
 if __name__ == '__main__':
