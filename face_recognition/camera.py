@@ -90,8 +90,30 @@ class VideoCamera(object):
             font = cv2.FONT_HERSHEY_DUPLEX
             cv2.putText(frame, name, (left + 6, bottom - 6), font, 1.0, (255, 255, 255), 1)
 
+        return frame
+
+    def get_jpg_bytes(self):
+        frame = self.get_frame()
         # We are using Motion JPEG, but OpenCV defaults to capture raw images,
         # so we must encode it into JPEG in order to correctly display the
         # video stream.
-        ret, jpeg = cv2.imencode('.jpg', frame)
-        return jpeg.tobytes()
+        ret, jpg = cv2.imencode('.jpg', frame)
+        return jpg.tobytes()
+
+
+if __name__ == '__main__':
+    cam = VideoCamera()
+    while True:
+        frame = cam.get_frame()
+
+        # show the frame
+        cv2.imshow("Frame", frame)
+        key = cv2.waitKey(1) & 0xFF
+
+        # if the `q` key was pressed, break from the loop
+        if key == ord("q"):
+            break
+
+    # do a bit of cleanup
+    cv2.destroyAllWindows()
+    print('finish')

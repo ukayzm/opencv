@@ -1,4 +1,4 @@
-# main.py
+# live_streaming.py
 
 from flask import Flask, render_template, Response
 from camera import VideoCamera
@@ -11,9 +11,9 @@ def index():
 
 def gen(camera):
     while True:
-        frame = camera.get_frame()
+        jpg_bytes = camera.get_jpg_bytes()
         yield (b'--frame\r\n'
-               b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n\r\n')
+               b'Content-Type: image/jpeg\r\n\r\n' + jpg_bytes + b'\r\n\r\n')
 
 @app.route('/video_feed')
 def video_feed():
