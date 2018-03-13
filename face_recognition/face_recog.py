@@ -4,6 +4,7 @@ import face_recognition
 import cv2
 import camera
 import os
+import numpy as np
 
 class FaceRecog():
     def __init__(self):
@@ -55,13 +56,15 @@ class FaceRecog():
             self.face_names = []
             for face_encoding in self.face_encodings:
                 # See if the face is a match for the known face(s)
-                matches = face_recognition.compare_faces(self.known_face_encodings, face_encoding)
-                name = "Unknown"
+                distances = face_recognition.face_distance(self.known_face_encodings, face_encoding)
+                min_value = min(distances)
 
-                # If a match was found in known_face_encodings, just use the first one.
-                if True in matches:
-                    first_match_index = matches.index(True)
-                    name = self.known_face_names[first_match_index]
+                # tolerance: How much distance between faces to consider it a match. Lower is more strict.
+                # 0.6 is typical best performance.
+                name = "Unknown"
+                if min_value < 0.6:
+                    index = np.argmin(distances)
+                    name = self.known_face_names[index]
 
                 self.face_names.append(name)
 
