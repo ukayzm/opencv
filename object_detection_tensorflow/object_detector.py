@@ -54,6 +54,7 @@ class ObjectDetector():
                 serialized_graph = fid.read()
                 od_graph_def.ParseFromString(serialized_graph)
                 tf.import_graph_def(od_graph_def, name='')
+        self.sess = tf.Session(graph=self.detection_graph)
 
         # Loading label map
         # Label maps map indices to category names,
@@ -65,65 +66,15 @@ class ObjectDetector():
         categories = label_map_util.convert_label_map_to_categories(label_map, max_num_classes=self.NUM_CLASSES, use_display_name=True)
         self.category_index = label_map_util.create_category_index(categories)
 
-        self.frame_count = 0
-
     def __del__(self):
         del self.camera
 
-    def detect_objects(self, frame):
-        # Definite input and output Tensors for detection_graph
-        image_tensor = self.detection_graph.get_tensor_by_name('image_tensor:0')
-        # Each box represents a part of the image where a particular object was detected.
-        detection_boxes = self.detection_graph.get_tensor_by_name('detection_boxes:0')
-        # Each score represent how level of confidence for each of the objects.
-        # Score is shown on the result image, together with the class label.
-        detection_scores = self.detection_graph.get_tensor_by_name('detection_scores:0')
-        detection_classes = self.detection_graph.get_tensor_by_name('detection_classes:0')
-        num_detections = self.detection_graph.get_tensor_by_name('num_detections:0')
-
-          # Expand dimensions since the model expects images to have shape: [1, None, None, 3]
-        image_np_expanded = np.expand_dims(frame, axis=0)
-          # Actual detection.
-        (boxes, scores, classes, num) = sess.run(
-              [detection_boxes, detection_scores, detection_classes, num_detections],
-              feed_dict={image_tensor: image_np_expanded})
-          # Visualization of the results of a detection.
-        vis_util.visualize_boxes_and_labels_on_image_array(
-              frame,
-              np.squeeze(boxes),
-              np.squeeze(classes).astype(np.int32),
-              np.squeeze(scores),
-              self.category_index,
-              use_normalized_coordinates=True,
-              line_thickness=8)
-
-    def get_frame(self):
-        # Grab a single frame of video
-        frame = self.camera.get_frame()
-
-        # Resize frame of video to 1/4 size for faster face recognition processing
-        #small_frame = cv2.resize(frame, (0, 0), fx=0.25, fy=0.25)
-        small_frame = frame
-
-        # Convert the image from BGR color (which OpenCV uses) to RGB color (which face_recognition uses)
-        rgb_small_frame = small_frame[:, :, ::-1]
-
-        # Only process every other frame of video to save time
-        if self.frame_count is 0:
-            self.detect_objects(rgb_small_frame)
-        self.frame_count += 1
-        if self.frame_count >= 1:
-            self.frame_count = 0
-
-        return frame
-
     def detect_objects2(self, image_np):
         with self.detection_graph.as_default():
-            with tf.Session(graph=self.detection_graph) as sess:
-                self.detect_objects_(image_np, sess, self.detection_graph)
+            self.detect_objects_(image_np, self.sess, self.detection_graph)
 
-    def detect_objects_(self, image_np, sess, detection_graph):
-        ops = tf.get_default_graph().get_operations()
+    def detect_objects_(self, image_np, sess, graph):
+        ops = graph.get_operations()
         all_tensor_names = {output.name for op in ops for output in op.outputs}
         tensor_dict = {}
         for key in [
@@ -132,7 +83,7 @@ class ObjectDetector():
           ]:
             tensor_name = key + ':0'
             if tensor_name in all_tensor_names:
-                tensor_dict[key] = tf.get_default_graph().get_tensor_by_name(tensor_name)
+                tensor_dict[key] = graph.get_tensor_by_name(tensor_name)
         if 'detection_masks' in tensor_dict:
             # The following processing is only for single image
             detection_boxes = tf.squeeze(tensor_dict['detection_boxes'], [0])
