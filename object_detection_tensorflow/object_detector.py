@@ -48,6 +48,38 @@ class ObjectDetector():
                 serialized_graph = fid.read()
                 od_graph_def.ParseFromString(serialized_graph)
                 tf.import_graph_def(od_graph_def, name='')
+
+            graph = self.detection_graph
+
+            ops = graph.get_operations()
+            all_tensor_names = {output.name for op in ops for output in op.outputs}
+            tensor_dict = {}
+            for key in [
+                  'num_detections', 'detection_boxes', 'detection_scores',
+                  'detection_classes', 'detection_masks'
+              ]:
+                tensor_name = key + ':0'
+                if tensor_name in all_tensor_names:
+                    tensor_dict[key] = graph.get_tensor_by_name(tensor_name)
+
+            if 'detection_masks' in tensor_dict:
+                # The following processing is only for single image
+                detection_boxes = tf.squeeze(tensor_dict['detection_boxes'], [0])
+                detection_masks = tf.squeeze(tensor_dict['detection_masks'], [0])
+                # Reframe is required to translate mask from box coordinates to image coordinates and fit the image size.
+                real_num_detection = tf.cast(tensor_dict['num_detections'][0], tf.int32)
+                detection_boxes = tf.slice(detection_boxes, [0, 0], [real_num_detection, -1])
+                detection_masks = tf.slice(detection_masks, [0, 0, 0], [real_num_detection, -1, -1])
+                detection_masks_reframed = utils_ops.reframe_box_masks_to_image_masks(
+                    detection_masks, detection_boxes, 480, 640)
+                detection_masks_reframed = tf.cast(
+                    tf.greater(detection_masks_reframed, 0.5), tf.uint8)
+                # Follow the convention by adding back the batch dimension
+                tensor_dict['detection_masks'] = tf.expand_dims(
+                    detection_masks_reframed, 0)
+
+            self.tensor_dict = tensor_dict
+
         self.sess = tf.Session(graph=self.detection_graph)
 
         # Loading label map
@@ -64,46 +96,24 @@ class ObjectDetector():
 
         self.last_inference_time = 0
 
-    def run_inference(self, image_np, sess, graph):
-        ops = graph.get_operations()
-        all_tensor_names = {output.name for op in ops for output in op.outputs}
-        tensor_dict = {}
-        for key in [
-              'num_detections', 'detection_boxes', 'detection_scores',
-              'detection_classes', 'detection_masks'
-          ]:
-            tensor_name = key + ':0'
-            if tensor_name in all_tensor_names:
-                tensor_dict[key] = graph.get_tensor_by_name(tensor_name)
-        if 'detection_masks' in tensor_dict:
-            # The following processing is only for single image
-            detection_boxes = tf.squeeze(tensor_dict['detection_boxes'], [0])
-            detection_masks = tf.squeeze(tensor_dict['detection_masks'], [0])
-            # Reframe is required to translate mask from box coordinates to image coordinates and fit the image size.
-            real_num_detection = tf.cast(tensor_dict['num_detections'][0], tf.int32)
-            detection_boxes = tf.slice(detection_boxes, [0, 0], [real_num_detection, -1])
-            detection_masks = tf.slice(detection_masks, [0, 0, 0], [real_num_detection, -1, -1])
-            detection_masks_reframed = utils_ops.reframe_box_masks_to_image_masks(
-                detection_masks, detection_boxes, image_np.shape[0], image_np.shape[1])
-            detection_masks_reframed = tf.cast(
-                tf.greater(detection_masks_reframed, 0.5), tf.uint8)
-            # Follow the convention by adding back the batch dimension
-            tensor_dict['detection_masks'] = tf.expand_dims(
-                detection_masks_reframed, 0)
-        image_tensor = tf.get_default_graph().get_tensor_by_name('image_tensor:0')
+    def run_inference(self, image_np):
+        sess = self.sess
+        graph = self.detection_graph
+        with graph.as_default():
+            image_tensor = graph.get_tensor_by_name('image_tensor:0')
 
-        # Run inference
-        output_dict = sess.run(tensor_dict,
-                             feed_dict={image_tensor: np.expand_dims(image_np, 0)})
+            # Run inference
+            output_dict = sess.run(self.tensor_dict,
+                                 feed_dict={image_tensor: np.expand_dims(image_np, 0)})
 
-        # all outputs are float32 numpy arrays, so convert types as appropriate
-        output_dict['num_detections'] = int(output_dict['num_detections'][0])
-        output_dict['detection_classes'] = output_dict[
-          'detection_classes'][0].astype(np.uint8)
-        output_dict['detection_boxes'] = output_dict['detection_boxes'][0]
-        output_dict['detection_scores'] = output_dict['detection_scores'][0]
-        if 'detection_masks' in output_dict:
-            output_dict['detection_masks'] = output_dict['detection_masks'][0]
+            # all outputs are float32 numpy arrays, so convert types as appropriate
+            output_dict['num_detections'] = int(output_dict['num_detections'][0])
+            output_dict['detection_classes'] = output_dict[
+              'detection_classes'][0].astype(np.uint8)
+            output_dict['detection_boxes'] = output_dict['detection_boxes'][0]
+            output_dict['detection_scores'] = output_dict['detection_scores'][0]
+            if 'detection_masks' in output_dict:
+                output_dict['detection_masks'] = output_dict['detection_masks'][0]
 
         return output_dict
 
@@ -115,6 +125,7 @@ class ObjectDetector():
         return False
 
     def detect_objects(self, frame):
+        time1 = time.time()
         # Grab a single frame of video
 
         # Resize frame of video to 1/4 size for faster face recognition processing
@@ -124,10 +135,13 @@ class ObjectDetector():
         # Convert the image from BGR color (which OpenCV uses) to RGB color (which face_recognition uses)
         rgb_small_frame = small_frame[:, :, ::-1]
 
+        time2 = time.time()
+
         # Only process every other frame of video to save time
         if self.time_to_run_inference():
-            with self.detection_graph.as_default():
-                self.output_dict = self.run_inference(rgb_small_frame, self.sess, self.detection_graph)
+            self.output_dict = self.run_inference(rgb_small_frame)
+
+        time3 = time.time()
 
         vis_util.visualize_boxes_and_labels_on_image_array(
           frame,
@@ -138,6 +152,10 @@ class ObjectDetector():
           instance_masks=self.output_dict.get('detection_masks'),
           use_normalized_coordinates=True,
           line_thickness=1)
+
+        time4 = time.time()
+
+        print("%0.3f, %0.3f, %0.3f sec" % (time2 - time1, time3 - time2, time4 - time3))
 
         return frame
 
@@ -153,8 +171,8 @@ class ObjectDetector():
 if __name__ == '__main__':
     import camera
 
-    model = 'ssd_mobilenet_v1_coco_2017_11_17'
-    #model = 'mask_rcnn_inception_v2_coco_2018_01_28'
+    #model = 'ssd_mobilenet_v1_coco_2017_11_17'
+    model = 'mask_rcnn_inception_v2_coco_2018_01_28'
    
     print("ObjectDetector('%s')" % model)
     detector = ObjectDetector(model)
