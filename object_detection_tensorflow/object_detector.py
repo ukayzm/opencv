@@ -1,7 +1,6 @@
 # object_detector.py
 
 import cv2
-import camera
 import os
 import numpy as np
 import tensorflow as tf
@@ -33,11 +32,6 @@ class ObjectDetector():
                 print(self.graph_file, "is extracted");
 
     def __init__(self, model_name):
-        # Using OpenCV to capture from device 0. If you have trouble capturing
-        # from a webcam, comment the line below out and use a video file
-        # instead.
-        self.camera = camera.VideoCamera()
-
         # Initialize some variables
         self.process_this_frame = True
 
@@ -62,18 +56,12 @@ class ObjectDetector():
         # we know that this corresponds to `airplane`.
         # Here we use internal utility functions,
         # but anything that returns a dictionary mapping integers to appropriate string labels would be fine
-        label_map = label_map_util.load_labelmap(self.PATH_TO_LABELS)
+        label_file = os.path.join('data', 'mscoco_label_map.pbtxt')
+        label_map = label_map_util.load_labelmap(self.lebel_file)
         categories = label_map_util.convert_label_map_to_categories(label_map, max_num_classes=self.NUM_CLASSES, use_display_name=True)
         self.category_index = label_map_util.create_category_index(categories)
 
-    def __del__(self):
-        del self.camera
-
-    def detect_objects2(self, image_np):
-        with self.detection_graph.as_default():
-            self.detect_objects_(image_np, self.sess, self.detection_graph)
-
-    def detect_objects_(self, image_np, sess, graph):
+    def detect_objects(self, image_np, sess, graph):
         ops = graph.get_operations()
         all_tensor_names = {output.name for op in ops for output in op.outputs}
         tensor_dict = {}
@@ -114,20 +102,12 @@ class ObjectDetector():
         if 'detection_masks' in output_dict:
             output_dict['detection_masks'] = output_dict['detection_masks'][0]
 
-        vis_util.visualize_boxes_and_labels_on_image_array(
-          image_np,
-          output_dict['detection_boxes'],
-          output_dict['detection_classes'],
-          output_dict['detection_scores'],
-          self.category_index,
-          instance_masks=output_dict.get('detection_masks'),
-          use_normalized_coordinates=True,
-          line_thickness=1)
+        return output_dict
 
 
-    def get_frame2(self):
+
+    def run_inference(self, frame):
         # Grab a single frame of video
-        frame = self.camera.get_frame()
 
         # Resize frame of video to 1/4 size for faster face recognition processing
         #small_frame = cv2.resize(frame, (0, 0), fx=0.25, fy=0.25)
@@ -137,7 +117,27 @@ class ObjectDetector():
         rgb_small_frame = small_frame[:, :, ::-1]
 
         # Only process every other frame of video to save time
-        self.detect_objects2(rgb_small_frame)
+        with self.detection_graph.as_default():
+            output_dict = self.detect_objects(rgb_small_frame, self.sess, self.detection_graph)
+            print('detection_boxes')
+            print(output_dict['detection_boxes'])
+            print('detection_classes')
+            print(output_dict['detection_classes'])
+            print('detection_scores')
+            print(output_dict['detection_scores'])
+            print('self.category_index')
+            print(self.category_index)
+            print('detection_masks')
+            print(output_dict.get('detection_masks'))
+            vis_util.visualize_boxes_and_labels_on_image_array(
+              frame,
+              output_dict['detection_boxes'],
+              output_dict['detection_classes'],
+              output_dict['detection_scores'],
+              self.category_index,
+              instance_masks=output_dict.get('detection_masks'),
+              use_normalized_coordinates=True,
+              line_thickness=1)
 
         return frame
 
@@ -151,10 +151,23 @@ class ObjectDetector():
 
 
 if __name__ == '__main__':
-    #detector = ObjectDetector('ssd_mobilenet_v1_coco_2017_11_17')
-    detector = ObjectDetector('mask_rcnn_inception_v2_coco_2018_01_28')
+    import camera
+
+    model = 'ssd_mobilenet_v1_coco_2017_11_17'
+    #model = 'mask_rcnn_inception_v2_coco_2018_01_28'
+   
+    print("ObjectDetector('%s')" % model)
+    detector = ObjectDetector(model)
+
+    # Using OpenCV to capture from device 0. If you have trouble capturing
+    # from a webcam, comment the line below out and use a video file
+    # instead.
+    camera = camera.VideoCamera()
+
+    print("press `q` to quit")
     while True:
-        frame = detector.get_frame2()
+        frame = camera.get_frame()
+        frame = detector.run_inference(frame)
 
         # show the frame
         cv2.imshow("Frame", frame)
