@@ -180,11 +180,11 @@ if __name__ == '__main__':
     # Using OpenCV to capture from device 0. If you have trouble capturing
     # from a webcam, comment the line below out and use a video file
     # instead.
-    camera = camera.VideoCamera()
+    cam = camera.VideoCamera()
 
     print("press `q` to quit")
     while True:
-        frame = camera.get_frame()
+        frame = cam.get_frame()
         frame = detector.detect_objects(frame)
 
         # show the frame
