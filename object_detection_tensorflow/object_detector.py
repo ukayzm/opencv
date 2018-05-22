@@ -6,16 +6,16 @@ import numpy as np
 import tensorflow as tf
 import tarfile
 import six.moves.urllib as urllib
+import time
 
-from utils import label_map_util
-from utils import visualization_utils as vis_util
+from object_detection.utils import label_map_util
+from object_detection.utils import visualization_utils as vis_util
 from object_detection.utils import ops as utils_ops
 
 
 class ObjectDetector():
     DOWNLOAD_BASE = 'http://download.tensorflow.org/models/object_detection/'
     GRAPH_FILE_NAME = 'frozen_inference_graph.pb'
-    PATH_TO_LABELS = 'mscoco_label_map.pbtxt'
     NUM_CLASSES = 90
 
     def download_model(self, model_name):
@@ -57,11 +57,14 @@ class ObjectDetector():
         # Here we use internal utility functions,
         # but anything that returns a dictionary mapping integers to appropriate string labels would be fine
         label_file = os.path.join('data', 'mscoco_label_map.pbtxt')
-        label_map = label_map_util.load_labelmap(self.lebel_file)
+        label_map = label_map_util.load_labelmap(label_file)
         categories = label_map_util.convert_label_map_to_categories(label_map, max_num_classes=self.NUM_CLASSES, use_display_name=True)
         self.category_index = label_map_util.create_category_index(categories)
+        self.output_dict = None
 
-    def detect_objects(self, image_np, sess, graph):
+        self.last_inference_time = 0
+
+    def run_inference(self, image_np, sess, graph):
         ops = graph.get_operations()
         all_tensor_names = {output.name for op in ops for output in op.outputs}
         tensor_dict = {}
@@ -89,11 +92,11 @@ class ObjectDetector():
                 detection_masks_reframed, 0)
         image_tensor = tf.get_default_graph().get_tensor_by_name('image_tensor:0')
 
-      # Run inference
+        # Run inference
         output_dict = sess.run(tensor_dict,
                              feed_dict={image_tensor: np.expand_dims(image_np, 0)})
 
-      # all outputs are float32 numpy arrays, so convert types as appropriate
+        # all outputs are float32 numpy arrays, so convert types as appropriate
         output_dict['num_detections'] = int(output_dict['num_detections'][0])
         output_dict['detection_classes'] = output_dict[
           'detection_classes'][0].astype(np.uint8)
@@ -104,9 +107,14 @@ class ObjectDetector():
 
         return output_dict
 
+    def time_to_run_inference(self):
+        unixtime = int(time.time())
+        if self.last_inference_time != unixtime:
+            self.last_inference_time = unixtime
+            return True
+        return False
 
-
-    def run_inference(self, frame):
+    def detect_objects(self, frame):
         # Grab a single frame of video
 
         # Resize frame of video to 1/4 size for faster face recognition processing
@@ -117,27 +125,19 @@ class ObjectDetector():
         rgb_small_frame = small_frame[:, :, ::-1]
 
         # Only process every other frame of video to save time
-        with self.detection_graph.as_default():
-            output_dict = self.detect_objects(rgb_small_frame, self.sess, self.detection_graph)
-            print('detection_boxes')
-            print(output_dict['detection_boxes'])
-            print('detection_classes')
-            print(output_dict['detection_classes'])
-            print('detection_scores')
-            print(output_dict['detection_scores'])
-            print('self.category_index')
-            print(self.category_index)
-            print('detection_masks')
-            print(output_dict.get('detection_masks'))
-            vis_util.visualize_boxes_and_labels_on_image_array(
-              frame,
-              output_dict['detection_boxes'],
-              output_dict['detection_classes'],
-              output_dict['detection_scores'],
-              self.category_index,
-              instance_masks=output_dict.get('detection_masks'),
-              use_normalized_coordinates=True,
-              line_thickness=1)
+        if self.time_to_run_inference():
+            with self.detection_graph.as_default():
+                self.output_dict = self.run_inference(rgb_small_frame, self.sess, self.detection_graph)
+
+        vis_util.visualize_boxes_and_labels_on_image_array(
+          frame,
+          self.output_dict['detection_boxes'],
+          self.output_dict['detection_classes'],
+          self.output_dict['detection_scores'],
+          self.category_index,
+          instance_masks=self.output_dict.get('detection_masks'),
+          use_normalized_coordinates=True,
+          line_thickness=1)
 
         return frame
 
@@ -167,7 +167,7 @@ if __name__ == '__main__':
     print("press `q` to quit")
     while True:
         frame = camera.get_frame()
-        frame = detector.run_inference(frame)
+        frame = detector.detect_objects(frame)
 
         # show the frame
         cv2.imshow("Frame", frame)
