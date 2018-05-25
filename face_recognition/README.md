@@ -13,4 +13,4 @@ $ python face_recog.py
 $ python live_streaming.py
 ```
 
-Put picture with one person's face in `knowns` directory. Change the file name as the person's name like: `john.jpg` or `jane.jpg`. Then run `python face_recog.py`.
+Put picture with one person's face in `knowns` directory. Change the file name as the person's name like: `john.jpg` or `jane.jpg`. Then run `python face_recog.py`. Or `python live_streaming.py` to send video over network.
