@@ -14,3 +14,6 @@ $ python live_streaming.py
 ```
 
 Put picture with one person's face in `knowns` directory. Change the file name as the person's name like: `john.jpg` or `jane.jpg`. Then run `python face_recog.py`.
+
+Visit [https://ukayzm.github.io/python-face-recognition/](https://ukayzm.github.io/python-face-recognition/) for more information.
+
