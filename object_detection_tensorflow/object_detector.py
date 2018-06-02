@@ -171,8 +171,8 @@ class ObjectDetector():
 if __name__ == '__main__':
     import camera
 
-    #model = 'ssd_mobilenet_v1_coco_2017_11_17'
-    model = 'mask_rcnn_inception_v2_coco_2018_01_28'
+    model = 'ssd_mobilenet_v1_coco_2017_11_17'
+    #model = 'mask_rcnn_inception_v2_coco_2018_01_28'
    
     print("ObjectDetector('%s')" % model)
     detector = ObjectDetector(model)
