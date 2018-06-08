@@ -13,4 +13,17 @@ $ python object_detector.py
 $ python live_streaming.py
 ```
 
-You can specify the model to use when creating ObjectDetector object. It downloads the model if not exists in local. Refer to [Detection model zoo](https://github.com/tensorflow/models/blob/master/research/object_detection/g3doc/detection_model_zoo.md) for the model name.
+You can specify the model to use when creating ObjectDetector object. Change the line of `object_detector.py`
+```
+174     model = 'ssd_mobilenet_v1_coco_2017_11_17'
+175     #model = 'mask_rcnn_inception_v2_coco_2018_01_28'
+```
+or the line of `live_streaming.py`.
+```
+15    model = 'ssd_mobilenet_v1_coco_2017_11_17'
+16    #model = 'mask_rcnn_inception_v2_coco_2018_01_28'
+```
+
+Refer to [Detection model zoo](https://github.com/tensorflow/models/blob/master/research/object_detection/g3doc/detection_model_zoo.md) for the model name to use. The model is automatically downloaded if not exists in local.
+
+Visit [https://ukayzm.github.io/tensorflow-instance-segmentation/](https://ukayzm.github.io/tensorflow-instance-segmentation/) for more information.
