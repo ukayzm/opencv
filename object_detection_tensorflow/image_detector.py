@@ -4,33 +4,33 @@ from object_detector import *
 import cv2
 import numpy as np
 import sys
-
-def usage():
-    print("usage:", sys.argv[0], "img_file")
+import argparse
 
 if __name__ == '__main__':
-    if len(sys.argv) < 2:
-        print("no image file given.")
-        usage()
-        exit()
+    ap = argparse.ArgumentParser()
+    ap.add_argument('-o', '--output-file', default=None,
+                    help='detected frame is saved to file')
+    ap.add_argument('image_file', help='image_file_to_run_inference')
+    args = ap.parse_args()
+    print(args)
 
-    #model = 'pet'
-    model = 'ssd_mobilenet_v1_coco_2017_11_17'
-    #model = 'mask_rcnn_inception_v2_coco_2018_01_28'
-
-    print("ObjectDetector('%s')" % model)
-    detector = ObjectDetector(model)
+    #detector = ObjectDetector('ssd_mobilenet_v1_coco_2017_11_17')
+    #detector = ObjectDetector('mask_rcnn_inception_v2_coco_2018_01_28')
+    detector = ObjectDetector('pet', label_file='data/pet_label_map.pbtxt')
 
     img = cv2.imread(sys.argv[1], cv2.IMREAD_COLOR)
     height, width = img.shape[:2]
     print("image file:", sys.argv[1], "(%dx%d)" % (width, height))
 
-    print("press any key to quit")
     frame = detector.detect_objects(img)
 
-    # show the frame
-    cv2.imshow("Frame", frame)
-    key = cv2.waitKey(0)
+    if args.output_file:
+        cv2.imwrite(args.output_file, frame)
+    else:
+        # show the frame
+        print("press any key to quit")
+        cv2.imshow("Frame", frame)
+        key = cv2.waitKey(0)
 
-    # do a bit of cleanup
-    cv2.destroyAllWindows()
+        # do a bit of cleanup
+        cv2.destroyAllWindows()

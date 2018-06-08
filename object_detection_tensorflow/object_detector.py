@@ -31,8 +31,9 @@ class ObjectDetector():
                 tar_file.extract(file, os.getcwd())
                 print(self.graph_file, "is extracted");
 
-    def __init__(self, model_name):
+    def __init__(self, model_name, label_file='data/mscoco_label_map.pbtxt'):
         # Initialize some variables
+        print("ObjectDetector('%s', '%s')" % (model_name, label_file))
         self.process_this_frame = True
 
         # download model
@@ -88,7 +89,6 @@ class ObjectDetector():
         # we know that this corresponds to `airplane`.
         # Here we use internal utility functions,
         # but anything that returns a dictionary mapping integers to appropriate string labels would be fine
-        label_file = os.path.join('data', 'mscoco_label_map.pbtxt')
         label_map = label_map_util.load_labelmap(label_file)
         categories = label_map_util.convert_label_map_to_categories(label_map, max_num_classes=self.NUM_CLASSES, use_display_name=True)
         self.category_index = label_map_util.create_category_index(categories)
