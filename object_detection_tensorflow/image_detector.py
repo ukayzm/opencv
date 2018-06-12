@@ -14,9 +14,9 @@ if __name__ == '__main__':
     args = ap.parse_args()
     print(args)
 
-    #detector = ObjectDetector('ssd_mobilenet_v1_coco_2017_11_17')
+    detector = ObjectDetector('ssd_mobilenet_v1_coco_2017_11_17')
     #detector = ObjectDetector('mask_rcnn_inception_v2_coco_2018_01_28')
-    detector = ObjectDetector('pet', label_file='data/pet_label_map.pbtxt')
+    #detector = ObjectDetector('pet', label_file='data/pet_label_map.pbtxt')
 
     img = cv2.imread(sys.argv[1], cv2.IMREAD_COLOR)
     height, width = img.shape[:2]
