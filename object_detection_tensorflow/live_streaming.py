@@ -12,11 +12,9 @@ def index():
     return render_template('index.html')
 
 def gen(fr):
-    model = 'ssd_mobilenet_v1_coco_2017_11_17'
-    #model = 'mask_rcnn_inception_v2_coco_2018_01_28'
-
-    print("ObjectDetector('%s')" % model)
-    detector = object_detector.ObjectDetector(model)
+    detector = ObjectDetector('ssd_mobilenet_v1_coco_2017_11_17')
+    #detector = ObjectDetector('mask_rcnn_inception_v2_coco_2018_01_28')
+    #detector = ObjectDetector('pet', label_file='data/pet_label_map.pbtxt')
 
     cam = camera.VideoCamera()
 

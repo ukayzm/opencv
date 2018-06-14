@@ -31,8 +31,9 @@ class ObjectDetector():
                 tar_file.extract(file, os.getcwd())
                 print(self.graph_file, "is extracted");
 
-    def __init__(self, model_name):
+    def __init__(self, model_name, label_file='data/mscoco_label_map.pbtxt'):
         # Initialize some variables
+        print("ObjectDetector('%s', '%s')" % (model_name, label_file))
         self.process_this_frame = True
 
         # download model
@@ -88,7 +89,6 @@ class ObjectDetector():
         # we know that this corresponds to `airplane`.
         # Here we use internal utility functions,
         # but anything that returns a dictionary mapping integers to appropriate string labels would be fine
-        label_file = os.path.join('data', 'mscoco_label_map.pbtxt')
         label_map = label_map_util.load_labelmap(label_file)
         categories = label_map_util.convert_label_map_to_categories(label_map, max_num_classes=self.NUM_CLASSES, use_display_name=True)
         self.category_index = label_map_util.create_category_index(categories)
@@ -171,11 +171,9 @@ class ObjectDetector():
 if __name__ == '__main__':
     import camera
 
-    model = 'ssd_mobilenet_v1_coco_2017_11_17'
-    #model = 'mask_rcnn_inception_v2_coco_2018_01_28'
-   
-    print("ObjectDetector('%s')" % model)
-    detector = ObjectDetector(model)
+    detector = ObjectDetector('ssd_mobilenet_v1_coco_2017_11_17')
+    #detector = ObjectDetector('mask_rcnn_inception_v2_coco_2018_01_28')
+    #detector = ObjectDetector('pet', label_file='data/pet_label_map.pbtxt')
 
     # Using OpenCV to capture from device 0. If you have trouble capturing
     # from a webcam, comment the line below out and use a video file
