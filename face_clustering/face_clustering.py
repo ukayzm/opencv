@@ -3,19 +3,27 @@ import face_recognition
 import cv2
 
 class Face():
-    def __init__(self, frame_no, name, box, encoding):
-        self.frame_no = frame_no
+    def __init__(self, frame_id, name, box, encoding):
+        self.frame_id = frame_id
         self.name = name
         self.box = box
         self.encoding = encoding
 
 class FaceClustering():
-    def quantify(self, frameId, rgb):
+    def __init__(self, src):
+        print("%dx%d, %d frame/sec" % (src.get(3), src.get(4), src.get(5)))
+        self.faces = []
+        self.src = src
+        self.num_frame = 0
+        self.frame_id = 0
+        self.frame_rate = round(src.get(5))
+
+    def quantify(self, frame_id, rgb):
         faces_in_frame = []
         boxes = face_recognition.face_locations(rgb, model="hog")
         encodings = face_recognition.face_encodings(rgb, boxes)
         for box, encoding in zip(boxes, encodings):
-            face = Face(frameId, None, box, encoding)
+            face = Face(frame_id, None, box, encoding)
             faces_in_frame.append(face)
         return faces_in_frame
 
@@ -25,46 +33,48 @@ class FaceClustering():
             (top, right, bottom, left) = face.box
             cv2.rectangle(frame, (left, top), (right, bottom), (0, 0, 255), 2)
 
+    def run(self):
+        if self.src.isOpened() is False:
+            return False
 
-if __name__ == '__main__':
-    import math
-    import datetime
+        ret, frame = self.src.read()
+        if frame is None:
+            return False
 
-    cam = cv2.VideoCapture(0)
-    frameRate = cam.get(5)
-    print("frameRate =", frameRate)
-    frame_no = 0
-    prevFrameId = frame_no // math.floor(frameRate)
-    fc = FaceClustering()
+        self.num_frame += 1
+        if self.num_frame % self.frame_rate != 0:
+            return True
 
-    faces = []
-
-    while (cam.isOpened()):
-        ret, frame = cam.read()
-        frame_no += 1
-        frameId = frame_no // math.floor(frameRate)
-        if (frameId == prevFrameId):
-            continue
-        prevFrameId = frameId
-        print("frameId =", frameId)
+        frame_id = self.num_frame // self.frame_rate
+        print("frame_id =", frame_id)
 
         rgb = frame[:, :, ::-1]
-        faces_in_frame = fc.quantify(frameId, rgb)
+        faces_in_frame = self.quantify(frame_id, rgb)
 
         #if (len(faces_in_frame) == 0):
-        #    continue
+        #    return True
 
         print(faces_in_frame)
 
         # show the frame
-        fc.drawBox(frame, faces_in_frame)
-        cv2.imshow("Frame", frame)
+        self.drawBox(frame, faces_in_frame)
+        fname = "frame_" + str(frame_id) + ".jpg"
+        cv2.imwrite(fname, frame)
+        #cv2.imshow("Frame", frame)
 
-        faces.extend(faces_in_frame)
+        self.faces.extend(faces_in_frame)
 
-        # if the `q` key was pressed, break from the loop
-        key = cv2.waitKey(1) & 0xFF
-        if key == ord("q"):
+        return True
+
+
+if __name__ == '__main__':
+    #cam = cv2.VideoCapture(0)
+    cam = cv2.VideoCapture('LaLaLand-SummerMontage_Madeline.mp4')
+    fc = FaceClustering(cam)
+
+    while True:
+        ret = fc.run()
+        if ret is False:
             break
 
     # do a bit of cleanup
