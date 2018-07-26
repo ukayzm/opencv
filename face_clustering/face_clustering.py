@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+from __future__ import print_function
 import face_recognition
 import cv2
 
@@ -10,13 +11,14 @@ class Face():
         self.encoding = encoding
 
 class FaceClustering():
-    def __init__(self, src):
+    def __init__(self, src, frame_per_second):
         print("%dx%d, %d frame/sec" % (src.get(3), src.get(4), src.get(5)))
         self.faces = []
         self.src = src
-        self.num_frame = 0
         self.frame_id = 0
         self.frame_rate = round(src.get(5))
+        self.capture_per_frame = int(self.frame_rate / frame_per_second)
+        print("capture every %d frame" % self.capture_per_frame)
 
     def quantify(self, frame_id, rgb):
         faces_in_frame = []
@@ -41,25 +43,21 @@ class FaceClustering():
         if frame is None:
             return False
 
-        self.num_frame += 1
-        if self.num_frame % self.frame_rate != 0:
+        self.frame_id += 1
+        if self.frame_id % self.capture_per_frame != 0:
             return True
 
-        frame_id = self.num_frame // self.frame_rate
-        print("frame_id =", frame_id)
-
         rgb = frame[:, :, ::-1]
-        faces_in_frame = self.quantify(frame_id, rgb)
+        faces_in_frame = self.quantify(self.frame_id, rgb)
 
-        #if (len(faces_in_frame) == 0):
-        #    return True
+        print("frame_id =", self.frame_id, faces_in_frame)
 
-        print(faces_in_frame)
+        if not faces_in_frame:
+            return True
 
         # show the frame
         self.drawBox(frame, faces_in_frame)
-        fname = "frame_" + str(frame_id) + ".jpg"
-        cv2.imwrite(fname, frame)
+        cv2.imwrite("frame_%08d.jpg" % self.frame_id, frame)
         #cv2.imshow("Frame", frame)
 
         self.faces.extend(faces_in_frame)
@@ -68,9 +66,26 @@ class FaceClustering():
 
 
 if __name__ == '__main__':
-    #cam = cv2.VideoCapture(0)
-    cam = cv2.VideoCapture('LaLaLand-SummerMontage_Madeline.mp4')
-    fc = FaceClustering(cam)
+    import argparse
+
+    ap = argparse.ArgumentParser()
+    ap.add_argument("-v", "--video",
+                    help="video file. Web cam 0 is used when omitted")
+    ap.add_argument("-f", "--frame",
+                    help="# of frame to capture per second")
+    args = vars(ap.parse_args())
+
+    if args.get("video", None) is None:
+        cam = cv2.VideoCapture(0)
+    else:
+        cam = cv2.VideoCapture(args["video"])
+
+    if args.get("frame", None) is None:
+        frame_per_second = 1
+    else:
+        frame_per_second = float(args["frame"])
+
+    fc = FaceClustering(cam, frame_per_second)
 
     while True:
         ret = fc.run()
