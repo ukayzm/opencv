@@ -27,24 +27,15 @@ class FaceClustering():
     def capture_filename(self, frame_id):
         return "frame_%08d.jpg" % frame_id
 
+    def signal_handler(self, sig, frame):
+        print(" stop encoding.")
+        self.run_encoding = False
+
     def drawBoxes(self, frame, faces_in_frame):
         # Draw a box around the face
         for face in faces_in_frame:
             (top, right, bottom, left) = face.box
             cv2.rectangle(frame, (left, top), (right, bottom), (0, 0, 255), 2)
-
-    def quantify(self, frame_id, rgb):
-        faces_in_frame = []
-        boxes = face_recognition.face_locations(rgb, model="hog")
-        encodings = face_recognition.face_encodings(rgb, boxes)
-        for box, encoding in zip(boxes, encodings):
-            face = Face(frame_id, None, box, encoding)
-            faces_in_frame.append(face)
-        return faces_in_frame
-
-    def signal_handler(self, sig, frame):
-        print(" stop encoding.")
-        self.run_encoding = False
 
     def encode(self, src_file, capture_per_second, stop=0):
         src = cv2.VideoCapture(src_file)
@@ -83,14 +74,20 @@ class FaceClustering():
                 break
 
             rgb = frame[:, :, ::-1]
-            faces_in_frame = self.quantify(frame_id, rgb)
+            boxes = face_recognition.face_locations(rgb, model="hog")
 
-            print("frame_id =", frame_id, faces_in_frame)
-
-            if not faces_in_frame:
+            print("frame_id =", frame_id, boxes)
+            if not boxes:
                 continue
 
-            # show the frame
+            encodings = face_recognition.face_encodings(rgb, boxes)
+
+            faces_in_frame = []
+            for box, encoding in zip(boxes, encodings):
+                face = Face(frame_id, None, box, encoding)
+                faces_in_frame.append(face)
+
+            # save the frame
             self.drawBoxes(frame, faces_in_frame)
             pathname = os.path.join(self.capture_dir,
                                     self.capture_filename(frame_id))
@@ -144,11 +141,11 @@ class FaceClustering():
 
         os.system("rm -rf ID*")
         for label_id in label_ids:
-            # find all indexes of label_id
-            indexes = np.where(clt.labels_ == label_id)[0]
-
             dir_name = "ID%d" % label_id
             os.mkdir(dir_name)
+
+            # find all indexes of label_id
+            indexes = np.where(clt.labels_ == label_id)[0]
 
             # save face images
             for i in indexes:
