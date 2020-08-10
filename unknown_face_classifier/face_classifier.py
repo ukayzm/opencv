@@ -79,8 +79,8 @@ if __name__ == '__main__':
     import imutils
 
     ap = argparse.ArgumentParser()
-    ap.add_argument("-e", "--encode", required=True,
-                    help="video file to encode or '0' to encode web cam")
+    ap.add_argument("-f", "--file", required=True,
+                    help="video file to detect or '0' to detect from web cam")
     ap.add_argument("-t", "--threshold", default=0.55, type=float,
                     help="threshold of the similarity")
     ap.add_argument("-c", "--capture", default=1, type=int,
@@ -89,7 +89,7 @@ if __name__ == '__main__':
                     help="stop encoding after # seconds")
     args = ap.parse_args()
 
-    src_file = args.encode
+    src_file = args.file
     if src_file == "0":
         src_file = 0
 
@@ -98,19 +98,23 @@ if __name__ == '__main__':
         print("cannot open file", src_file)
         exit(1)
 
+    frame_width = src.get(cv2.CAP_PROP_FRAME_WIDTH)
+    frame_height = src.get(cv2.CAP_PROP_FRAME_HEIGHT)
+
     frame_id = 0
     frame_rate = src.get(5)
     frames_between_capture = int(round(frame_rate) / args.capture)
 
-    print("start detecting from src: %dx%d, %f frame/sec" % (src.get(3), src.get(4), frame_rate))
-    print(" - capture every %d frame" % frames_between_capture)
+    print("source", args.file)
+    print("%dx%d, %f frame/sec" % (src.get(3), src.get(4), frame_rate))
+    print("capture every %d frame" % frames_between_capture)
+    print("similarity shreshold:", args.threshold)
     if args.stop > 0:
-        print(" - stop after %d seconds" % args.stop)
+        print("Will stop after %d seconds." % args.stop)
 
     running = True
 
     def signal_handler(sig, frame):
-        print(" stop running...")
         global running
         running = False
 
@@ -132,69 +136,66 @@ if __name__ == '__main__':
         if args.stop > 0 and seconds > args.stop:
             break
 
-        print()
-        print("frame", frame_id, "@", seconds, "seconds")
         start_time = time.time()
         faces = fc.detect_faces(seconds, frame)
-        if len(faces) > 0:
-            for face in faces:
-                fc.classify_face(face)
-            s = "%d faces in the frame" % len(faces)
-            s += " - %d persons" % len(fc.known_persons)
-            s += ", %d unknown faces" % len(fc.unknown_faces)
-            print(s)
+        for face in faces:
+            fc.classify_face(face)
         elapsed_time = time.time() - start_time
-        s = "Operation took %f seconds" % elapsed_time
-        print(s)
+
+        s = "\rframe " + str(frame_id) + " @ time " + str(seconds)
+        s += " takes %.3f seconds" % elapsed_time
+        s += " - %d persons" % len(fc.known_persons)
+        s += ", %d unknown faces" % len(fc.unknown_faces)
+        print(s, end="    ")
 
     # restore SIGINT (^C) handler
     signal.signal(signal.SIGINT, prev_handler)
     running = False
     src.release()
     print()
-    print("similarity shreshold:", fc.similarity_threshold)
-    print("total", len(fc.known_persons), "persons")
-    print("total", len(fc.unknown_faces), "unknown faces")
-
-    # save the results
-    os.system("rm -rf unknown*")
-    os.system("rm -rf doe*")
-    os.system("rm -rf montage*")
-
-    for person in fc.known_persons:
-        dir_name = person.name
-        os.mkdir(dir_name)
-        for face in person.faces:
-            filename = str(face.second) + ".jpg"
-            pathname = os.path.join(dir_name, filename)
-            cv2.imwrite(pathname, face.image)
-        images = [face.image for face in person.faces]
-        montages = imutils.build_montages(images, (128, 128), (8, 8))
-        for i, montage in enumerate(montages):
-            filename = "montage." + person.name + ("-%02d.jpg" % i)
-            cv2.imwrite(filename, montage)
-
-    if len(fc.unknown_faces) > 0:
-        dir_name = "unknown_faces"
-        os.mkdir(dir_name)
-        i = 0
-        for face in fc.unknown_faces:
-            i += 1
-            filename = str(i) + "-" + str(face.second) + ".jpg"
-            pathname = os.path.join(dir_name, filename)
-            cv2.imwrite(pathname, face.image)
-        images = [face.image for face in fc.unknown_faces]
-        montages = imutils.build_montages(images, (128, 128), (8, 8))
-        for i, montage in enumerate(montages):
-            filename = "montage.unknown_faces-%02d.jpg" % i
-            cv2.imwrite(filename, montage)
 
     # check the result
     if len(fc.known_persons) > 0:
-        print()
         print("similarities of persons:")
         encodings = [person.encoding for person in fc.known_persons]
         for person in fc.known_persons:
             distances = face_recognition.face_distance(encodings, person.encoding)
             print("{:10} [".format(person.name), " ".join(["{:5.3f}".format(x) for x in distances]), "]")
+
+    # save the results
+    dir_name, ext = os.path.splitext(os.path.basename(args.file))
+    print("saving pictures in the directory \'%s\'" % dir_name)
+
+    os.system("rm -rf " + dir_name)
+    os.mkdir(dir_name)
+
+    for person in fc.known_persons:
+        pathname = os.path.join(dir_name, person.name)
+        os.mkdir(pathname)
+        for face in person.faces:
+            filename = str(face.second) + ".jpg"
+            pathname = os.path.join(dir_name, person.name, filename)
+            cv2.imwrite(pathname, face.image)
+        images = [face.image for face in person.faces]
+        montages = imutils.build_montages(images, (128, 128), (8, 8))
+        for i, montage in enumerate(montages):
+            filename = "montage." + person.name + ("-%02d.jpg" % i)
+            pathname = os.path.join(dir_name, filename)
+            cv2.imwrite(pathname, montage)
+
+    if len(fc.unknown_faces) > 0:
+        pathname = os.path.join(dir_name, "unknown_faces")
+        os.mkdir(pathname)
+        i = 0
+        for face in fc.unknown_faces:
+            i += 1
+            filename = str(i) + "-" + str(face.second) + ".jpg"
+            pathname = os.path.join(dir_name, "unknown_faces", filename)
+            cv2.imwrite(pathname, face.image)
+        images = [face.image for face in fc.unknown_faces]
+        montages = imutils.build_montages(images, (128, 128), (8, 8))
+        for i, montage in enumerate(montages):
+            filename = "montage.unknown_faces-%02d.jpg" % i
+            pathname = os.path.join(dir_name, filename)
+            cv2.imwrite(pathname, montage)
 

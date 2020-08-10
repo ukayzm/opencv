@@ -11,7 +11,7 @@ class Person():
 
     def __init__(self, name=None):
         if name is None:
-            self.name = "doe" + str(Person._id)
+            self.name = "person" + str(Person._id)
             Person._id += 1
         else:
             self.name = name
