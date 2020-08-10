@@ -177,7 +177,7 @@ if __name__ == '__main__':
             pathname = os.path.join(dir_name, person.name, filename)
             cv2.imwrite(pathname, face.image)
         images = [face.image for face in person.faces]
-        montages = imutils.build_montages(images, (128, 128), (8, 8))
+        montages = imutils.build_montages(images, (128, 128), (6, 2))
         for i, montage in enumerate(montages):
             filename = "montage." + person.name + ("-%02d.jpg" % i)
             pathname = os.path.join(dir_name, filename)
@@ -193,7 +193,7 @@ if __name__ == '__main__':
             pathname = os.path.join(dir_name, "unknown_faces", filename)
             cv2.imwrite(pathname, face.image)
         images = [face.image for face in fc.unknown_faces]
-        montages = imutils.build_montages(images, (128, 128), (8, 8))
+        montages = imutils.build_montages(images, (128, 128), (6, 2))
         for i, montage in enumerate(montages):
             filename = "montage.unknown_faces-%02d.jpg" % i
             pathname = os.path.join(dir_name, filename)
