@@ -35,7 +35,7 @@ source /home/rostude/Videos/SomeoneInTheCrowd.mp4
 capture every 30 frame
 similarity shreshold: 0.55
 press ^C to stop detecting immediately
-frame 8310 @ time 277.277 takes 0.324 seconds - 9 persons, 4 unknown faces
+frame 8310 @ time 277.277 takes 0.324 seconds - 9 persons, 180 known faces, 4 unknown faces
 similarities of persons:
 person1    [ 0.000 0.496 0.468 0.306 0.447 0.697 0.678 0.560 0.680 ]
 person2    [ 0.496 0.000 0.500 0.519 0.516 0.766 0.705 0.281 0.798 ]

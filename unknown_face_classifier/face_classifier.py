@@ -3,49 +3,60 @@
 from person import Person
 from person import Face
 import face_recognition
+import os
+import shutil
 import numpy as np
 
 
 class FaceClassifier():
-    def __init__(self, threshold=0.55):
-        self.known_persons = []
-        self.unknown_faces = []
+    def __init__(self, threshold):
         self.similarity_threshold = threshold
+        self.known_persons = []
+        self.unknown_dir = "unknowns"
+        self.unknowns = Person(self.unknown_dir)
 
     def get_face_image(self, frame, box):
         img_height, img_width = frame.shape[:2]
-        (top, right, bottom, left) = box
-        box_width = right - left
-        box_height = bottom - top
-        top = max(top - box_height, 0)
-        bottom = min(bottom + box_height, img_height - 1)
-        left = max(left - box_width, 0)
-        right = min(right + box_width, img_width - 1)
-        return frame[top:bottom, left:right]
+        (box_top, box_right, box_bottom, box_left) = box
+        box_width = box_right - box_left
+        box_height = box_bottom - box_top
+        crop_top = max(box_top - box_height, 0)
+        pad_top = -min(box_top - box_height, 0)
+        crop_bottom = min(box_bottom + box_height, img_height - 1)
+        pad_bottom = max(box_bottom + box_height - img_height, 0)
+        crop_left = max(box_left - box_width, 0)
+        pad_left = -min(box_left - box_width, 0)
+        crop_right = min(box_right + box_width, img_width - 1)
+        pad_right = max(box_right + box_width - img_width, 0)
+        face_image = frame[crop_top:crop_bottom, crop_left:crop_right]
+        if (pad_top == 0 and pad_bottom == 0):
+            if (pad_left == 0 and pad_right == 0):
+                return face_image
+        padded = cv2.copyMakeBorder(face_image, pad_top, pad_bottom,
+                                    pad_left, pad_right, cv2.BORDER_CONSTANT)
+        return padded
 
-    def detect_faces(self, second, frame):
-        rgb = frame[:, :, ::-1]
-        boxes = face_recognition.face_locations(rgb, model="hog")
-        if not boxes:
-            return []
-
+    def detect_faces(self, frame):
         faces = []
-        encodings = face_recognition.face_encodings(rgb, boxes)
-        for box, encoding in zip(boxes, encodings):
+        rgb = frame[:, :, ::-1]
+        second = "%.3f" % time.time()
+        boxes = face_recognition.face_locations(rgb, model="hog")
+        for box in boxes:
             face_image = self.get_face_image(frame, box)
-            face = Face(second, face_image, encoding)
+            face = Face(second, face_image)
+            face.calculate_encoding()
             faces.append(face)
         return faces
 
     def classify_face(self, face):
         # collect encodings of the faces
         known_encodings = [person.encoding for person in self.known_persons]
-        unknown_encodings = [face.encoding for face in self.unknown_faces]
+        unknown_encodings = [face.encoding for face in self.unknowns.faces]
         all_encodings = known_encodings + unknown_encodings
 
         if len(all_encodings) == 0:
             # this is the first face
-            self.unknown_faces.append(face)
+            self.unknowns.faces.append(face)
             return
 
         # see if the face is a match for the previous faces
@@ -62,40 +73,82 @@ class FaceClassifier():
                 person = Person()
                 person.add_face(face)
                 newly_known_index = index - len(self.known_persons)
-                newly_known_face = self.unknown_faces.pop(newly_known_index)
+                newly_known_face = self.unknowns.faces.pop(newly_known_index)
                 person.add_face(newly_known_face)
                 self.known_persons.append(person)
         else:
             # unknown face
-            self.unknown_faces.append(face)
+            self.unknowns.faces.append(face)
+
+    def save(self, dir_name):
+        try:
+            shutil.rmtree(dir_name)
+        except OSError as e:
+            pass
+        print("save persons in the directory", dir_name)
+        os.mkdir(dir_name)
+        for person in self.known_persons:
+            person.save(dir_name)
+            person.save_montages(dir_name)
+        self.unknowns.save(dir_name)
+        self.unknowns.save_montages(dir_name)
+
+    def load(self, dir_name):
+        print("load persons in the directory", dir_name)
+        for entry in os.scandir(dir_name):
+            if entry.is_dir(follow_symlinks=False):
+                pathname = os.path.join(dir_name, entry.name)
+                person = Person.load(pathname)
+                if entry.name == self.unknown_dir:
+                    self.unknowns = person
+                else:
+                    self.known_persons.append(person)
+                print(person.name, len(person.faces), "faces")
+
+    def briefing(self):
+        s = "%d persons" % len(self.known_persons)
+        s += ", %d known faces" % sum(len(person.faces) for person in
+                                      self.known_persons)
+        s += ", %d unknown faces" % len(self.unknowns.faces)
+        print(s)
+        encodings = [person.encoding for person in self.known_persons]
+        for person in self.known_persons:
+            distances = face_recognition.face_distance(encodings, person.encoding)
+            s = "{:10} [ ".format(person.name)
+            s += " ".join(["{:5.3f}".format(x) for x in distances])
+            mn, av, mx = person.distance_statistics()
+            s += " ] %.3f, %.3f, %.3f" % (mn, av, mx)
+            s += ", %d faces" % len(person.faces)
+            print(s)
 
 
 if __name__ == '__main__':
     import argparse
     import signal
-    import os
     import cv2
     import time
     import imutils
 
     ap = argparse.ArgumentParser()
-    ap.add_argument("-f", "--file", required=True,
+    ap.add_argument("-i", "--input", required=True,
                     help="video file to detect or '0' to detect from web cam")
-    ap.add_argument("-t", "--threshold", default=0.55, type=float,
-                    help="threshold of the similarity")
     ap.add_argument("-c", "--capture", default=1, type=int,
                     help="# of frame to capture per second")
     ap.add_argument("-s", "--stop", default=0, type=int,
-                    help="stop encoding after # seconds")
+                    help="stop detecting after # seconds")
+    ap.add_argument("-t", "--threshold", default=0.55, type=float,
+                    help="threshold of the similarity")
+    ap.add_argument("-l", "--load", action='store_true',
+                    help="load person data")
     args = ap.parse_args()
 
-    src_file = args.file
+    src_file = args.input
     if src_file == "0":
         src_file = 0
 
     src = cv2.VideoCapture(src_file)
     if not src.isOpened():
-        print("cannot open file", src_file)
+        print("cannot open input file", src_file)
         exit(1)
 
     frame_width = src.get(cv2.CAP_PROP_FRAME_WIDTH)
@@ -104,13 +157,14 @@ if __name__ == '__main__':
     frame_id = 0
     frame_rate = src.get(5)
     frames_between_capture = int(round(frame_rate) / args.capture)
+    dir_name, ext = os.path.splitext(os.path.basename(args.input))
 
-    print("source", args.file)
+    print("source", args.input)
     print("%dx%d, %f frame/sec" % (src.get(3), src.get(4), frame_rate))
     print("capture every %d frame" % frames_between_capture)
     print("similarity shreshold:", args.threshold)
     if args.stop > 0:
-        print("Will stop after %d seconds." % args.stop)
+        print("will stop after %d seconds." % args.stop)
 
     running = True
 
@@ -118,11 +172,16 @@ if __name__ == '__main__':
         global running
         running = False
 
+    fc = FaceClassifier(args.threshold)
+    if args.load:
+        fc.load(dir_name)
+        fc.briefing()
+
     # set SIGINT (^C) handler
     prev_handler = signal.signal(signal.SIGINT, signal_handler)
     print("press ^C to stop detecting immediately")
 
-    fc = FaceClassifier(args.threshold)
+    num_new_faces = 0
     while running:
         ret, frame = src.read()
         if frame is None:
@@ -137,16 +196,22 @@ if __name__ == '__main__':
             break
 
         start_time = time.time()
-        faces = fc.detect_faces(seconds, frame)
+        faces = fc.detect_faces(frame)
+        num_new_faces += len(faces)
         for face in faces:
             fc.classify_face(face)
         elapsed_time = time.time() - start_time
 
-        s = "\rframe " + str(frame_id) + " @ time " + str(seconds)
+        s = "\rframe " + str(frame_id)
+        s += " @ time %.3f" % seconds
         s += " takes %.3f seconds" % elapsed_time
-        s += " - %d persons" % len(fc.known_persons)
-        s += ", %d unknown faces" % len(fc.unknown_faces)
+        s += ", %d new faces" % len(faces)
+        s += " - total %d persons" % len(fc.known_persons)
+        s += ", %d known faces" % sum(len(person.faces) for person in
+                                      fc.known_persons)
+        s += ", %d unknown faces" % len(fc.unknowns.faces)
         print(s, end="    ")
+        print()
 
     # restore SIGINT (^C) handler
     signal.signal(signal.SIGINT, prev_handler)
@@ -154,48 +219,7 @@ if __name__ == '__main__':
     src.release()
     print()
 
-    # check the result
-    if len(fc.known_persons) > 0:
-        print("similarities of persons:")
-        encodings = [person.encoding for person in fc.known_persons]
-        for person in fc.known_persons:
-            distances = face_recognition.face_distance(encodings, person.encoding)
-            print("{:10} [".format(person.name), " ".join(["{:5.3f}".format(x) for x in distances]), "]")
+    if num_new_faces > 0:
+        fc.save(dir_name)
 
-    # save the results
-    dir_name, ext = os.path.splitext(os.path.basename(args.file))
-    print("saving pictures in the directory \'%s\'" % dir_name)
-
-    os.system("rm -rf " + dir_name)
-    os.mkdir(dir_name)
-
-    for person in fc.known_persons:
-        pathname = os.path.join(dir_name, person.name)
-        os.mkdir(pathname)
-        for face in person.faces:
-            filename = str(face.second) + ".jpg"
-            pathname = os.path.join(dir_name, person.name, filename)
-            cv2.imwrite(pathname, face.image)
-        images = [face.image for face in person.faces]
-        montages = imutils.build_montages(images, (128, 128), (6, 2))
-        for i, montage in enumerate(montages):
-            filename = "montage." + person.name + ("-%02d.jpg" % i)
-            pathname = os.path.join(dir_name, filename)
-            cv2.imwrite(pathname, montage)
-
-    if len(fc.unknown_faces) > 0:
-        pathname = os.path.join(dir_name, "unknown_faces")
-        os.mkdir(pathname)
-        i = 0
-        for face in fc.unknown_faces:
-            i += 1
-            filename = str(i) + "-" + str(face.second) + ".jpg"
-            pathname = os.path.join(dir_name, "unknown_faces", filename)
-            cv2.imwrite(pathname, face.image)
-        images = [face.image for face in fc.unknown_faces]
-        montages = imutils.build_montages(images, (128, 128), (6, 2))
-        for i, montage in enumerate(montages):
-            filename = "montage.unknown_faces-%02d.jpg" % i
-            pathname = os.path.join(dir_name, filename)
-            cv2.imwrite(pathname, montage)
-
+    fc.briefing()
