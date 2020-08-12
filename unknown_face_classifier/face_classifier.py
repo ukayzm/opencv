@@ -51,31 +51,34 @@ class FaceClassifier():
     def classify_face(self, face):
         # collect encodings of the faces
         known_encodings = [person.encoding for person in self.known_persons]
-        unknown_encodings = [face.encoding for face in self.unknowns.faces]
-        all_encodings = known_encodings + unknown_encodings
 
-        if len(all_encodings) == 0:
+        if len(known_encodings) > 0:
+            # see if the face is a match for the previous faces
+            distances = face_recognition.face_distance(known_encodings, face.encoding)
+            index = np.argmin(distances)
+            min_value = distances[index]
+            if min_value < self.similarity_threshold:
+                # face of known person
+                self.known_persons[index].add_face(face)
+                return
+
+        if len(self.unknowns.faces) == 0:
             # this is the first face
             self.unknowns.faces.append(face)
             return
 
-        # see if the face is a match for the previous faces
-        distances = face_recognition.face_distance(all_encodings, face.encoding)
+        unknown_encodings = [face.encoding for face in self.unknowns.faces]
+        distances = face_recognition.face_distance(unknown_encodings, face.encoding)
         index = np.argmin(distances)
         min_value = distances[index]
         if min_value < self.similarity_threshold:
             # two faces are similar
-            if index < len(self.known_persons):
-                # face of known person
-                self.known_persons[index].add_face(face)
-            else:
-                # create new person with two faces
-                person = Person()
-                person.add_face(face)
-                newly_known_index = index - len(self.known_persons)
-                newly_known_face = self.unknowns.faces.pop(newly_known_index)
-                person.add_face(newly_known_face)
-                self.known_persons.append(person)
+            # create new person with two faces
+            person = Person()
+            newly_known_face = self.unknowns.faces.pop(index)
+            person.add_face(newly_known_face)
+            person.add_face(face)
+            self.known_persons.append(person)
         else:
             # unknown face
             self.unknowns.faces.append(face)
