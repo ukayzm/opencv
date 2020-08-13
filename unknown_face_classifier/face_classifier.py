@@ -6,6 +6,7 @@ import face_recognition
 import os
 import shutil
 import numpy as np
+from datetime import datetime
 
 
 class FaceClassifier():
@@ -39,12 +40,17 @@ class FaceClassifier():
     def detect_faces(self, frame):
         faces = []
         rgb = frame[:, :, ::-1]
-        second = "%.3f" % time.time()
         boxes = face_recognition.face_locations(rgb, model="hog")
-        for box in boxes:
+        if not boxes:
+            return faces
+
+        # faces found
+        now = datetime.now()
+        str_ms = now.strftime('%Y%m%d_%H%M%S.%f-')[:-3]
+        encodings = face_recognition.face_encodings(rgb, boxes)
+        for i, box in enumerate(boxes):
             face_image = self.get_face_image(frame, box)
-            face = Face(second, face_image)
-            face.calculate_encoding()
+            face = Face(str_ms + str(i), face_image, encodings[i])
             faces.append(face)
         return faces
 
@@ -84,20 +90,24 @@ class FaceClassifier():
             self.unknowns.faces.append(face)
 
     def save(self, dir_name):
+        print("save persons in the directory", dir_name)
+        start_time = time.time()
         try:
             shutil.rmtree(dir_name)
         except OSError as e:
             pass
-        print("save persons in the directory", dir_name)
         os.mkdir(dir_name)
         for person in self.known_persons:
             person.save(dir_name)
             person.save_montages(dir_name)
         self.unknowns.save(dir_name)
         self.unknowns.save_montages(dir_name)
+        elapsed_time = time.time() - start_time
+        print("save took", elapsed_time, "second")
 
     def load(self, dir_name):
         print("load persons in the directory", dir_name)
+        start_time = time.time()
         for entry in os.scandir(dir_name):
             if entry.is_dir(follow_symlinks=False):
                 pathname = os.path.join(dir_name, entry.name)
@@ -106,16 +116,18 @@ class FaceClassifier():
                     self.unknowns = person
                 else:
                     self.known_persons.append(person)
-                print(person.name, len(person.faces), "faces")
+        elapsed_time = time.time() - start_time
+        print("load took", elapsed_time, "second")
 
-    def briefing(self):
+    def print_persons(self):
         s = "%d persons" % len(self.known_persons)
         s += ", %d known faces" % sum(len(person.faces) for person in
                                       self.known_persons)
         s += ", %d unknown faces" % len(self.unknowns.faces)
         print(s)
-        encodings = [person.encoding for person in self.known_persons]
-        for person in self.known_persons:
+        persons = sorted(self.known_persons, key=lambda obj : obj.name)
+        encodings = [person.encoding for person in persons]
+        for person in persons:
             distances = face_recognition.face_distance(encodings, person.encoding)
             s = "{:10} [ ".format(person.name)
             s += " ".join(["{:5.3f}".format(x) for x in distances])
@@ -141,8 +153,6 @@ if __name__ == '__main__':
                     help="stop detecting after # seconds")
     ap.add_argument("-t", "--threshold", default=0.55, type=float,
                     help="threshold of the similarity")
-    ap.add_argument("-l", "--load", action='store_true',
-                    help="load person data")
     args = ap.parse_args()
 
     src_file = args.input
@@ -160,7 +170,8 @@ if __name__ == '__main__':
     frame_id = 0
     frame_rate = src.get(5)
     frames_between_capture = int(round(frame_rate) / args.capture)
-    dir_name, ext = os.path.splitext(os.path.basename(args.input))
+    #dir_name, ext = os.path.splitext(os.path.basename(args.input))
+    dir_name = "result"
 
     print("source", args.input)
     print("%dx%d, %f frame/sec" % (src.get(3), src.get(4), frame_rate))
@@ -176,9 +187,9 @@ if __name__ == '__main__':
         running = False
 
     fc = FaceClassifier(args.threshold)
-    if args.load:
+    if os.path.isdir(dir_name):
         fc.load(dir_name)
-        fc.briefing()
+        fc.print_persons()
 
     # set SIGINT (^C) handler
     prev_handler = signal.signal(signal.SIGINT, signal_handler)
@@ -199,10 +210,13 @@ if __name__ == '__main__':
             break
 
         start_time = time.time()
+
+        # this is main
         faces = fc.detect_faces(frame)
-        num_new_faces += len(faces)
         for face in faces:
             fc.classify_face(face)
+
+        num_new_faces += len(faces)
         elapsed_time = time.time() - start_time
 
         s = "\rframe " + str(frame_id)
@@ -214,7 +228,6 @@ if __name__ == '__main__':
                                       fc.known_persons)
         s += ", %d unknown faces" % len(fc.unknowns.faces)
         print(s, end="    ")
-        print()
 
     # restore SIGINT (^C) handler
     signal.signal(signal.SIGINT, prev_handler)
@@ -222,7 +235,7 @@ if __name__ == '__main__':
     src.release()
     print()
 
-    if num_new_faces > 0:
-        fc.save(dir_name)
+    #if num_new_faces > 0:
+    fc.save(dir_name)
 
-    fc.briefing()
+    fc.print_persons()

@@ -7,57 +7,54 @@ import shutil
 import face_recognition
 import numpy as np
 import time
-import pickle
+from PIL.PngImagePlugin import PngImageFile, PngInfo
+import base64
+from PIL import Image
 
 
 class Face():
-    _last_id = 0
+    key = "face_encoding"
 
-    def __init__(self, second, image, face_id=None):
-        if face_id is None:
-            Face._last_id += 1
-            self.id = Face._last_id
-        else:
-            self.id = face_id
-            if (Face._last_id < self.id):
-                Face._last_id = self.id
-        self.second = second
+    def __init__(self, face_id, image, face_encoding):
+        self.face_id = face_id
         self.image = image
+        self.encoding = face_encoding
 
-    def calculate_encoding(self):
-        height, width, channels = self.image.shape
+    def save(self, base_dir):
+        # save image
+        pathname = os.path.join(base_dir, self.face_id + ".png")
+        pil_image = cv2.cvtColor(self.image, cv2.COLOR_BGR2RGB)
+        png = Image.fromarray(pil_image)
+        b64_str = base64.b64encode(self.encoding.tobytes())
+        metadata = PngInfo()
+        metadata.add_text(Face.key, b64_str)
+        png.save(pathname, pnginfo=metadata)
+
+    @classmethod
+    def calculate_encoding(cls, image):
+        height, width, channels = image.shape
         top = int(height/3)
         bottom = int(top*2)
         left = int(width/3)
         right = int(left*2)
         box = (top, right, bottom, left)
-        self.encoding = face_recognition.face_encodings(self.image, [box])[0]
-
-    def save(self, base_dir):
-        filename = self.second + "-" + str(self.id) + ".png"
-        pathname = os.path.join(base_dir, filename)
-        cv2.imwrite(pathname, self.image)
-        filename = self.second + "-" + str(self.id) + ".pickle"
-        pathname = os.path.join(base_dir, filename)
-        with open(pathname, "wb") as f:
-            pickle.dump(self.encoding, f)
+        return face_recognition.face_encodings(image, [box])[0]
 
     @classmethod
     def load(cls, pathname):
+        # load image
         image = cv2.imread(pathname)
         basename = os.path.basename(pathname)
         stemname, ext = os.path.splitext(basename)
-        splits = stemname.split("-")
-        second = splits[0]
-        face_id = int(splits[1])
-        new_face = cls(second, image, face_id=face_id)
-        stempathname, ext = os.path.splitext(pathname)
-        filename = stempathname + ".pickle"
-        try:
-            with open(filename, "rb") as f:
-                new_face.encoding = pickle.load(f)
-        except OSError as e:
-            new_face.calculate_encoding()
+        # load encoding from metadata
+        png = PngImageFile(pathname)
+        if Face.key in png.info:
+            b64_str = png.info[Face.key]
+            b64_decoded = base64.b64decode(b64_str)
+            face_encoding = np.frombuffer(b64_decoded)
+        else:
+            face_encoding = Face.calculate_encoding(image)
+        new_face = cls(stemname, image, face_encoding)
         return new_face
 
 
@@ -67,9 +64,13 @@ class Person():
     def __init__(self, name=None):
         if name is None:
             Person._last_id += 1
-            self.name = "person" + str(Person._last_id)
+            self.name = "person_%02d" % Person._last_id
         else:
             self.name = name
+            if name.startswith("person_") and name[7:].isdigit():
+                id = int(name[7:])
+                if id > Person._last_id:
+                    Person._last_id = id
         self.encoding = None
         self.faces = []
 
