@@ -24,13 +24,18 @@ class Face():
         cv2.imwrite(pathname, self.image)
 
     @classmethod
-    def calculate_encoding(cls, image):
-        height, width, channels = image.shape
-        top = int(height/3)
-        bottom = int(top*2)
-        left = int(width/3)
-        right = int(left*2)
-        box = (top, right, bottom, left)
+    def get_encoding(cls, image):
+        rgb = image[:, :, ::-1]
+        boxes = face_recognition.face_locations(rgb, model="hog")
+        if not boxes:
+            height, width, channels = image.shape
+            top = int(height/3)
+            bottom = int(top*2)
+            left = int(width/3)
+            right = int(left*2)
+            box = (top, right, bottom, left)
+        else:
+            box = boxes[0]
         return face_recognition.face_encodings(image, [box])[0]
 
 
@@ -68,7 +73,7 @@ class Person():
         distances = face_recognition.face_distance(encodings, self.encoding)
         return min(distances), np.mean(distances), max(distances)
 
-    def save(self, base_dir):
+    def save_faces(self, base_dir):
         pathname = os.path.join(base_dir, self.name)
         try:
             shutil.rmtree(pathname)
@@ -91,16 +96,21 @@ class Person():
         basename = os.path.basename(pathname)
         person = Person(basename)
         for face_filename in os.listdir(pathname):
-            if not face_filename.endswith(".png"):
-                continue
             face_pathname = os.path.join(pathname, face_filename)
             image = cv2.imread(face_pathname)
+            if image.size == 0:
+                continue
             if face_filename in face_encodings:
                 face_encoding = face_encodings[face_filename]
             else:
-                face_encoding = Face.calculate_encoding(image)
-            face = Face(face_filename, image, face_encoding)
-            person.faces.append(face)
+                print(pathname, face_filename, "calculate encoding")
+                face_encoding = Face.get_encoding(image)
+            if face_encoding is None:
+                print(pathname, face_filename, "drop face")
+            else:
+                face = Face(face_filename, image, face_encoding)
+                person.faces.append(face)
+        print(person.name, "has", len(person.faces), "faces")
         person.calculate_average_encoding()
         return person
 
@@ -108,13 +118,13 @@ class PersonDB():
     def __init__(self):
         self.persons = []
         self.unknown_dir = "unknowns"
-        self.encoding_file = "encodings"
+        self.encoding_file = "face_encodings"
         self.unknown = Person(self.unknown_dir)
 
     def load_db(self, dir_name):
         if not os.path.isdir(dir_name):
             return
-        print("load persons in the directory", dir_name)
+        print("start loading persons in the directory", dir_name)
         start_time = time.time()
 
         # read face_encodings
@@ -122,7 +132,7 @@ class PersonDB():
         try:
             with open(pathname, "rb") as f:
                 face_encodings = pickle.load(f)
-                print("load", len(face_encodings), "face_encodings from", pathname)
+                print(len(face_encodings), "face_encodings in", pathname)
         except:
             face_encodings = {}
 
@@ -131,36 +141,51 @@ class PersonDB():
             if entry.is_dir(follow_symlinks=False):
                 pathname = os.path.join(dir_name, entry.name)
                 person = Person.load(pathname, face_encodings)
+                if len(person.faces) == 0:
+                    continue
                 if entry.name == self.unknown_dir:
                     self.unknown = person
                 else:
                     self.persons.append(person)
         elapsed_time = time.time() - start_time
-        print("load took", elapsed_time, "second")
+        print("loading persons finished in %.3f sec" % elapsed_time)
+
+    def save_encodings(self, dir_name):
+        face_encodings = {}
+        for person in self.persons:
+            for face in person.faces:
+                face_encodings[face.filename] = face.encoding
+        for face in self.unknown.faces:
+            face_encodings[face.filename] = face.encoding
+        pathname = os.path.join(dir_name, self.encoding_file)
+        with open(pathname, "wb") as f:
+            pickle.dump(face_encodings, f)
+        print(pathname, "saved")
+
+    def save_montages(self, dir_name):
+        for person in self.persons:
+            person.save_montages(dir_name)
+        self.unknown.save_montages(dir_name)
+        print("montages saved")
 
     def save_db(self, dir_name):
-        print("save persons in the directory", dir_name)
+        print("start saving persons in the directory", dir_name)
         start_time = time.time()
         try:
             shutil.rmtree(dir_name)
         except OSError as e:
             pass
         os.mkdir(dir_name)
-        face_encodings = {}
+
         for person in self.persons:
-            person.save(dir_name)
-            person.save_montages(dir_name)
-            for face in person.faces:
-                face_encodings[face.filename] = face.encoding
-        self.unknown.save(dir_name)
-        self.unknown.save_montages(dir_name)
-        for face in self.unknown.faces:
-            face_encodings[face.filename] = face.encoding
-        pathname = os.path.join(dir_name, self.encoding_file)
-        with open(pathname, "wb") as f:
-            pickle.dump(face_encodings, f)
+            person.save_faces(dir_name)
+        self.unknown.save_faces(dir_name)
+
+        self.save_montages(dir_name)
+        self.save_encodings(dir_name)
+
         elapsed_time = time.time() - start_time
-        print("save took", elapsed_time, "second")
+        print("saving persons finished in %.3f sec" % elapsed_time)
 
     def __repr__(self):
         s = "%d persons" % len(self.persons)
@@ -188,3 +213,5 @@ if __name__ == '__main__':
     pdb = PersonDB()
     pdb.load_db(dir_name)
     pdb.print_persons()
+    pdb.save_montages(dir_name)
+    pdb.save_encodings(dir_name)

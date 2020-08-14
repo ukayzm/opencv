@@ -34,19 +34,20 @@ class FaceClassifier():
         return padded
 
     def detect_faces(self, frame):
-        faces = []
         rgb = frame[:, :, ::-1]
         boxes = face_recognition.face_locations(rgb, model="hog")
         if not boxes:
-            return faces
+            return []
 
         # faces found
+        faces = []
         now = datetime.now()
         str_ms = now.strftime('%Y%m%d_%H%M%S.%f')[:-3] + '-'
         encodings = face_recognition.face_encodings(rgb, boxes)
         for i, box in enumerate(boxes):
             face_image = self.get_face_image(frame, box)
             face = Face(str_ms + str(i) + ".png", face_image, encodings[i])
+            face.location = box
             faces.append(face)
         return faces
 
@@ -60,12 +61,14 @@ class FaceClassifier():
             if min_value < self.similarity_threshold:
                 # face of known person
                 persons[index].add_face(face)
-                return persons[index]
+                face.name = persons[index].name
+                return
 
         if len(unknown_faces) == 0:
             # this is the first face
             unknown_faces.append(face)
-            return None
+            face.name = "unknown"
+            return
 
         encodings = [face.encoding for face in unknown_faces]
         distances = face_recognition.face_distance(encodings, face.encoding)
@@ -79,11 +82,38 @@ class FaceClassifier():
             person.add_face(newly_known_face)
             person.add_face(face)
             persons.append(person)
-            return person
+            face.name = person.name
         else:
             # unknown face
             unknown_faces.append(face)
-            return None
+            face.name = "unknown"
+
+    def draw_name(self, frame, face):
+        color = (0, 0, 255)
+        thickness = 2
+        (top, right, bottom, left) = face.location
+
+        # draw box
+        width = 20
+        if width > (right - left) // 3:
+            width = (right - left) // 3
+        height = 20
+        if height > (bottom - top) // 3:
+            height = (bottom - top) // 3
+        cv2.line(frame, (left, top), (left+width, top), color, thickness)
+        cv2.line(frame, (right, top), (right-width, top), color, thickness)
+        cv2.line(frame, (left, bottom), (left+width, bottom), color, thickness)
+        cv2.line(frame, (right, bottom), (right-width, bottom), color, thickness)
+        cv2.line(frame, (left, top), (left, top+height), color, thickness)
+        cv2.line(frame, (right, top), (right, top+height), color, thickness)
+        cv2.line(frame, (left, bottom), (left, bottom-height), color, thickness)
+        cv2.line(frame, (right, bottom), (right, bottom-height), color, thickness)
+
+        # draw name
+        #cv2.rectangle(frame, (left, bottom + 35), (right, bottom), (0, 0, 255), cv2.FILLED)
+        font = cv2.FONT_HERSHEY_DUPLEX
+        cv2.putText(frame, face.name, (left + 6, bottom + 30), font, 1.0,
+                    (255, 255, 255), 1)
 
 
 if __name__ == '__main__':
@@ -102,6 +132,8 @@ if __name__ == '__main__':
                     help="stop detecting after # seconds")
     ap.add_argument("-t", "--threshold", default=0.5, type=float,
                     help="threshold of the similarity")
+    ap.add_argument("-d", "--display", action='store_true',
+                    help="display the frame in real time")
     args = ap.parse_args()
 
     src_file = args.input
@@ -119,7 +151,6 @@ if __name__ == '__main__':
     frame_id = 0
     frame_rate = src.get(5)
     frames_between_capture = int(round(frame_rate) / args.capture)
-    dir_name = "result"
 
     print("source", args.input)
     print("%dx%d, %f frame/sec" % (src.get(3), src.get(4), frame_rate))
@@ -128,6 +159,7 @@ if __name__ == '__main__':
     if args.stop > 0:
         print("will stop after %d seconds." % args.stop)
 
+    dir_name = "result"
     pdb = PersonDB()
     pdb.load_db(dir_name)
     pdb.print_persons()
@@ -139,7 +171,10 @@ if __name__ == '__main__':
         global running
         running = False
     prev_handler = signal.signal(signal.SIGINT, signal_handler)
-    print("press ^C to stop detecting immediately")
+    if args.display:
+        print("press q to stop detecting immediately")
+    else:
+        print("press ^C to stop detecting immediately")
 
     fc = FaceClassifier(args.threshold)
     while running:
@@ -162,6 +197,16 @@ if __name__ == '__main__':
         for face in faces:
             fc.compare_face(face, pdb.persons, pdb.unknown.faces)
 
+        if args.display:
+            for face in faces:
+                fc.draw_name(frame, face)
+            cv2.imshow("Frame", frame)
+            # imshow always works with waitKey
+            key = cv2.waitKey(1) & 0xFF
+            # if the `q` key was pressed, break from the loop
+            if key == ord("q"):
+                running = False
+
         elapsed_time = time.time() - start_time
 
         s = "\rframe " + str(frame_id)
@@ -179,3 +224,4 @@ if __name__ == '__main__':
 
     pdb.save_db(dir_name)
     pdb.print_persons()
+
