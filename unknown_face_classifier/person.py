@@ -7,28 +7,21 @@ import shutil
 import face_recognition
 import numpy as np
 import time
-from PIL.PngImagePlugin import PngImageFile, PngInfo
-import base64
-from PIL import Image
+import pickle
 
 
 class Face():
     key = "face_encoding"
 
-    def __init__(self, face_id, image, face_encoding):
-        self.face_id = face_id
+    def __init__(self, filename, image, face_encoding):
+        self.filename = filename
         self.image = image
         self.encoding = face_encoding
 
     def save(self, base_dir):
         # save image
-        pathname = os.path.join(base_dir, self.face_id + ".png")
-        pil_image = cv2.cvtColor(self.image, cv2.COLOR_BGR2RGB)
-        png = Image.fromarray(pil_image)
-        b64_str = base64.b64encode(self.encoding.tobytes())
-        metadata = PngInfo()
-        metadata.add_text(Face.key, b64_str)
-        png.save(pathname, pnginfo=metadata)
+        pathname = os.path.join(base_dir, self.filename)
+        cv2.imwrite(pathname, self.image)
 
     @classmethod
     def calculate_encoding(cls, image):
@@ -39,23 +32,6 @@ class Face():
         right = int(left*2)
         box = (top, right, bottom, left)
         return face_recognition.face_encodings(image, [box])[0]
-
-    @classmethod
-    def load(cls, pathname):
-        # load image
-        image = cv2.imread(pathname)
-        basename = os.path.basename(pathname)
-        stemname, ext = os.path.splitext(basename)
-        # load encoding from metadata
-        png = PngImageFile(pathname)
-        if Face.key in png.info:
-            b64_str = png.info[Face.key]
-            b64_decoded = base64.b64decode(b64_str)
-            face_encoding = np.frombuffer(b64_decoded)
-        else:
-            face_encoding = Face.calculate_encoding(image)
-        new_face = cls(stemname, image, face_encoding)
-        return new_face
 
 
 class Person():
@@ -78,9 +54,9 @@ class Person():
         # add face
         self.faces.append(face)
         # re-calculate encoding
-        self.calculate_encoding()
+        self.calculate_average_encoding()
 
-    def calculate_encoding(self):
+    def calculate_average_encoding(self):
         if len(self.faces) is 0:
             self.encoding = None
         else:
@@ -111,14 +87,104 @@ class Person():
             cv2.imwrite(pathname, montage)
 
     @classmethod
-    def load(cls, pathname):
+    def load(cls, pathname, face_encodings):
         basename = os.path.basename(pathname)
         person = Person(basename)
-        for filename in os.listdir(pathname):
-            if filename.endswith(".png"):
-                face_pathname = os.path.join(pathname, filename)
-                face = Face.load(face_pathname)
-                person.faces.append(face)
-        person.calculate_encoding()
+        for face_filename in os.listdir(pathname):
+            if not face_filename.endswith(".png"):
+                continue
+            face_pathname = os.path.join(pathname, face_filename)
+            image = cv2.imread(face_pathname)
+            if face_filename in face_encodings:
+                face_encoding = face_encodings[face_filename]
+            else:
+                face_encoding = Face.calculate_encoding(image)
+            face = Face(face_filename, image, face_encoding)
+            person.faces.append(face)
+        person.calculate_average_encoding()
         return person
 
+class PersonDB():
+    def __init__(self):
+        self.persons = []
+        self.unknown_dir = "unknowns"
+        self.encoding_file = "encodings"
+        self.unknown = Person(self.unknown_dir)
+
+    def load_db(self, dir_name):
+        if not os.path.isdir(dir_name):
+            return
+        print("load persons in the directory", dir_name)
+        start_time = time.time()
+
+        # read face_encodings
+        pathname = os.path.join(dir_name, self.encoding_file)
+        try:
+            with open(pathname, "rb") as f:
+                face_encodings = pickle.load(f)
+                print("load", len(face_encodings), "face_encodings from", pathname)
+        except:
+            face_encodings = {}
+
+        # read persons
+        for entry in os.scandir(dir_name):
+            if entry.is_dir(follow_symlinks=False):
+                pathname = os.path.join(dir_name, entry.name)
+                person = Person.load(pathname, face_encodings)
+                if entry.name == self.unknown_dir:
+                    self.unknown = person
+                else:
+                    self.persons.append(person)
+        elapsed_time = time.time() - start_time
+        print("load took", elapsed_time, "second")
+
+    def save_db(self, dir_name):
+        print("save persons in the directory", dir_name)
+        start_time = time.time()
+        try:
+            shutil.rmtree(dir_name)
+        except OSError as e:
+            pass
+        os.mkdir(dir_name)
+        face_encodings = {}
+        for person in self.persons:
+            person.save(dir_name)
+            person.save_montages(dir_name)
+            for face in person.faces:
+                face_encodings[face.filename] = face.encoding
+        self.unknown.save(dir_name)
+        self.unknown.save_montages(dir_name)
+        for face in self.unknown.faces:
+            face_encodings[face.filename] = face.encoding
+        pathname = os.path.join(dir_name, self.encoding_file)
+        with open(pathname, "wb") as f:
+            pickle.dump(face_encodings, f)
+        elapsed_time = time.time() - start_time
+        print("save took", elapsed_time, "second")
+
+    def __repr__(self):
+        s = "%d persons" % len(self.persons)
+        num_known_faces = sum(len(person.faces) for person in self.persons)
+        s += ", %d known faces" % num_known_faces
+        s += ", %d unknown faces" % len(self.unknown.faces)
+        return s
+
+    def print_persons(self):
+        print(self)
+        persons = sorted(self.persons, key=lambda obj : obj.name)
+        encodings = [person.encoding for person in persons]
+        for person in persons:
+            distances = face_recognition.face_distance(encodings, person.encoding)
+            s = "{:10} [ ".format(person.name)
+            s += " ".join(["{:5.3f}".format(x) for x in distances])
+            mn, av, mx = person.distance_statistics()
+            s += " ] %.3f, %.3f, %.3f" % (mn, av, mx)
+            s += ", %d faces" % len(person.faces)
+            print(s)
+
+
+if __name__ == '__main__':
+    dir_name = "result"
+    pdb = PersonDB()
+    pdb.load_db(dir_name)
+    pdb.print_persons()
