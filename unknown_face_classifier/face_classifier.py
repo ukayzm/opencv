@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 
-from person import Person
-from person import Face
-from person import PersonDB
+from person_db import Person
+from person_db import Face
+from person_db import PersonDB
 import face_recognition
 import numpy as np
 from datetime import datetime
+import cv2
 
 
 class FaceClassifier():
@@ -51,19 +52,22 @@ class FaceClassifier():
             faces.append(face)
         return faces
 
-    def compare_face(self, face, persons, unknown_faces):
-        if len(persons) > 0:
-            # see if the face is a match for the faces of known person
-            encodings = [person.encoding for person in persons]
-            distances = face_recognition.face_distance(encodings, face.encoding)
-            index = np.argmin(distances)
-            min_value = distances[index]
-            if min_value < self.similarity_threshold:
-                # face of known person
-                persons[index].add_face(face)
-                face.name = persons[index].name
-                return
+    def compare_with_known_persons(self, face, persons):
+        if len(persons) == 0:
+            return None
 
+        # see if the face is a match for the faces of known person
+        encodings = [person.encoding for person in persons]
+        distances = face_recognition.face_distance(encodings, face.encoding)
+        index = np.argmin(distances)
+        min_value = distances[index]
+        if min_value < self.similarity_threshold:
+            # face of known person
+            persons[index].add_face(face)
+            face.name = persons[index].name
+            return persons[index]
+
+    def compare_with_unknown_faces(self, face, unknown_faces):
         if len(unknown_faces) == 0:
             # this is the first face
             unknown_faces.append(face)
@@ -75,18 +79,19 @@ class FaceClassifier():
         index = np.argmin(distances)
         min_value = distances[index]
         if min_value < self.similarity_threshold:
-            # two faces are similar
-            # create new person with two faces
+            # two faces are similar - create new person with two faces
             person = Person()
             newly_known_face = unknown_faces.pop(index)
             person.add_face(newly_known_face)
             person.add_face(face)
-            persons.append(person)
             face.name = person.name
+            newly_known_face.name = person.name
+            return person
         else:
             # unknown face
             unknown_faces.append(face)
             face.name = "unknown"
+            return None
 
     def draw_name(self, frame, face):
         color = (0, 0, 255)
@@ -119,21 +124,22 @@ class FaceClassifier():
 if __name__ == '__main__':
     import argparse
     import signal
-    import cv2
     import time
-    import imutils
+    import os
 
     ap = argparse.ArgumentParser()
     ap.add_argument("-i", "--input", required=True,
                     help="video file to detect or '0' to detect from web cam")
-    ap.add_argument("-c", "--capture", default=1, type=int,
-                    help="# of frame to capture per second")
-    ap.add_argument("-s", "--stop", default=0, type=int,
+    ap.add_argument("-s", "--seconds", default=1, type=float,
+                    help="seconds between capture")
+    ap.add_argument("-S", "--stop", default=0, type=int,
                     help="stop detecting after # seconds")
-    ap.add_argument("-t", "--threshold", default=0.5, type=float,
+    ap.add_argument("-t", "--threshold", default=0.46, type=float,
                     help="threshold of the similarity")
     ap.add_argument("-d", "--display", action='store_true',
                     help="display the frame in real time")
+    ap.add_argument("-c", "--capture", action='store_true',
+                    help="save the captured frames with face in png file")
     args = ap.parse_args()
 
     src_file = args.input
@@ -150,19 +156,26 @@ if __name__ == '__main__':
 
     frame_id = 0
     frame_rate = src.get(5)
-    frames_between_capture = int(round(frame_rate) / args.capture)
+    frames_between_capture = int(round(frame_rate * args.seconds))
 
     print("source", args.input)
     print("%dx%d, %f frame/sec" % (src.get(3), src.get(4), frame_rate))
-    print("capture every %d frame" % frames_between_capture)
+    print("process every %d frame" % frames_between_capture)
     print("similarity shreshold:", args.threshold)
     if args.stop > 0:
         print("will stop after %d seconds." % args.stop)
 
-    dir_name = "result"
+    result_dir = "result"
     pdb = PersonDB()
-    pdb.load_db(dir_name)
+    pdb.load_db(result_dir)
     pdb.print_persons()
+
+    capture_dir = "captures"
+    num_capture = 0
+    if args.capture:
+        print("Captured frames are saved in '%s' directory" % capture_dir)
+        if not os.path.isdir(capture_dir):
+            os.mkdir(capture_dir)
 
     running = True
 
@@ -192,20 +205,32 @@ if __name__ == '__main__':
 
         start_time = time.time()
 
-        # this is main
+        # this is core
         faces = fc.detect_faces(frame)
         for face in faces:
-            fc.compare_face(face, pdb.persons, pdb.unknown.faces)
+            person = fc.compare_with_known_persons(face, pdb.persons)
+            if person:
+                continue
+            person = fc.compare_with_unknown_faces(face, pdb.unknown.faces)
+            if person:
+                pdb.persons.append(person)
 
-        if args.display:
+        if args.display or args.capture:
             for face in faces:
                 fc.draw_name(frame, face)
-            cv2.imshow("Frame", frame)
-            # imshow always works with waitKey
-            key = cv2.waitKey(1) & 0xFF
-            # if the `q` key was pressed, break from the loop
-            if key == ord("q"):
-                running = False
+            if args.capture and len(faces) > 0:
+                now = datetime.now()
+                filename = now.strftime('%Y%m%d_%H%M%S.%f')[:-3] + '.png'
+                pathname = os.path.join(capture_dir, filename)
+                cv2.imwrite(pathname, frame)
+                num_capture += 1
+            if args.display:
+                cv2.imshow("Frame", frame)
+                # imshow always works with waitKey
+                key = cv2.waitKey(1) & 0xFF
+                # if the `q` key was pressed, break from the loop
+                if key == ord("q"):
+                    running = False
 
         elapsed_time = time.time() - start_time
 
@@ -214,6 +239,8 @@ if __name__ == '__main__':
         s += " takes %.3f seconds" % elapsed_time
         s += ", %d new faces" % len(faces)
         s += " -> " + repr(pdb)
+        if num_capture > 0:
+            s += ", %d captures" % num_capture
         print(s, end="    ")
 
     # restore SIGINT (^C) handler
@@ -222,6 +249,6 @@ if __name__ == '__main__':
     src.release()
     print()
 
-    pdb.save_db(dir_name)
+    pdb.save_db(result_dir)
     pdb.print_persons()
 
