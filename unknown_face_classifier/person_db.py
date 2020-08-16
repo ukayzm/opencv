@@ -58,8 +58,6 @@ class Person():
     def add_face(self, face):
         # add face
         self.faces.append(face)
-        # re-calculate encoding
-        self.calculate_average_encoding()
 
     def calculate_average_encoding(self):
         if len(self.faces) is 0:

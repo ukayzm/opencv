@@ -8,28 +8,48 @@
 * if the encoding is similar with any face of unknowns, create new person
 * otherwise, save the face to unknown faces
 
+# Usage
+
+
 ```
 $ python face_classifier.py -h
-usage: face_classifier.py [-h] -f FILE [-t THRESHOLD] [-c CAPTURE] [-s STOP]
+usage: face_classifier.py [-h] [-t THRESHOLD] [-S SECONDS] [-s STOP] [-k SKIP]
+                          [-d] [-c CAPTURE]
+                          inputfile
+
+positional arguments:
+  inputfile             video file to detect or '0' to detect from web cam
 
 optional arguments:
   -h, --help            show this help message and exit
-  -f FILE, --file FILE  video file to detect or '0' to detect from web cam
   -t THRESHOLD, --threshold THRESHOLD
-                        threshold of the similarity
+                        threshold of the similarity (default=0.44)
+  -S SECONDS, --seconds SECONDS
+                        seconds between capture
+  -s STOP, --stop STOP  stop detecting after # seconds
+  -k SKIP, --skip SKIP  skip detecting for # seconds from the start
+  -d, --display         display the frame in real time
   -c CAPTURE, --capture CAPTURE
-                        # of frame to capture per second
-  -s STOP, --stop STOP  stop encoding after # seconds
+                        save the frames with face in the CAPTURE directory
 ```
 
+# Result
 
-# Result Example
+The result is saved in the `result` directory. This result is loaded on the next execution.
+
+* Check the classified faces in the `person_##` directory.
+* Change the directory name `person_##` to real name.
+* Move the wrongly classified faces to correct directory or `unknowns`. This will improve the accuracy on the next execution.
+
+You can remove or rename the `result` directory to prevent from loading.
+
+# Example Result
 
 Tested with this video in YouTube (La La Land, Someone in the Crowd)
 [![SomeoneInTheCrowd.mp4](https://img.youtube.com/vi/A7RmBgq4tT4/0.jpg)](https://www.youtube.com/watch?v=A7RmBgq4tT4)
 
 ```
-$ python face_classifier.py -f ~/Videos/SomeoneInTheCrowd.mp4
+$ python face_classifier.py ~/Videos/SomeoneInTheCrowd.mp4 -t 0.55
 source /home/rostude/Videos/SomeoneInTheCrowd.mp4
 1280x512, 29.970030 frame/sec
 capture every 30 frame

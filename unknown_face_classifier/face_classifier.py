@@ -64,6 +64,8 @@ class FaceClassifier():
         if min_value < self.similarity_threshold:
             # face of known person
             persons[index].add_face(face)
+            # re-calculate encoding
+            persons[index].calculate_average_encoding()
             face.name = persons[index].name
             return persons[index]
 
@@ -84,6 +86,7 @@ class FaceClassifier():
             newly_known_face = unknown_faces.pop(index)
             person.add_face(newly_known_face)
             person.add_face(face)
+            person.calculate_average_encoding()
             face.name = person.name
             newly_known_face.name = person.name
             return person
