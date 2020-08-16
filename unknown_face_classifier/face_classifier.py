@@ -128,56 +128,55 @@ if __name__ == '__main__':
     import os
 
     ap = argparse.ArgumentParser()
-    ap.add_argument("-i", "--input", required=True,
+    ap.add_argument("inputfile",
                     help="video file to detect or '0' to detect from web cam")
-    ap.add_argument("-s", "--seconds", default=1, type=float,
+    ap.add_argument("-t", "--threshold", default=0.44, type=float,
+                    help="threshold of the similarity (default=0.44)")
+    ap.add_argument("-S", "--seconds", default=1, type=float,
                     help="seconds between capture")
-    ap.add_argument("-S", "--stop", default=0, type=int,
+    ap.add_argument("-s", "--stop", default=0, type=int,
                     help="stop detecting after # seconds")
-    ap.add_argument("-t", "--threshold", default=0.46, type=float,
-                    help="threshold of the similarity")
+    ap.add_argument("-k", "--skip", default=0, type=int,
+                    help="skip detecting for # seconds from the start")
     ap.add_argument("-d", "--display", action='store_true',
                     help="display the frame in real time")
-    ap.add_argument("-c", "--capture", action='store_true',
-                    help="save the captured frames with face in png file")
+    ap.add_argument("-c", "--capture", type=str,
+                    help="save the frames with face in the CAPTURE directory")
     args = ap.parse_args()
 
-    src_file = args.input
+    src_file = args.inputfile
     if src_file == "0":
         src_file = 0
 
     src = cv2.VideoCapture(src_file)
     if not src.isOpened():
-        print("cannot open input file", src_file)
+        print("cannot open inputfile", src_file)
         exit(1)
 
     frame_width = src.get(cv2.CAP_PROP_FRAME_WIDTH)
     frame_height = src.get(cv2.CAP_PROP_FRAME_HEIGHT)
-
-    frame_id = 0
     frame_rate = src.get(5)
     frames_between_capture = int(round(frame_rate * args.seconds))
 
-    print("source", args.input)
+    print("source", args.inputfile)
     print("%dx%d, %f frame/sec" % (src.get(3), src.get(4), frame_rate))
     print("process every %d frame" % frames_between_capture)
     print("similarity shreshold:", args.threshold)
     if args.stop > 0:
-        print("will stop after %d seconds." % args.stop)
+        print("Detecting will be stopped after %d second." % args.stop)
 
+    # load person DB
     result_dir = "result"
     pdb = PersonDB()
     pdb.load_db(result_dir)
     pdb.print_persons()
 
-    capture_dir = "captures"
+    # prepare capture directory
     num_capture = 0
     if args.capture:
-        print("Captured frames are saved in '%s' directory" % capture_dir)
-        if not os.path.isdir(capture_dir):
-            os.mkdir(capture_dir)
-
-    running = True
+        print("Captured frames are saved in '%s' directory." % args.capture)
+        if not os.path.isdir(args.capture):
+            os.mkdir(args.capture)
 
     # set SIGINT (^C) handler
     def signal_handler(sig, frame):
@@ -185,11 +184,14 @@ if __name__ == '__main__':
         running = False
     prev_handler = signal.signal(signal.SIGINT, signal_handler)
     if args.display:
-        print("press q to stop detecting immediately")
+        print("Press q to stop detecting...")
     else:
-        print("press ^C to stop detecting immediately")
+        print("Press ^C to stop detecting...")
 
     fc = FaceClassifier(args.threshold)
+    frame_id = 0
+    running = True
+
     while running:
         ret, frame = src.read()
         if frame is None:
@@ -202,6 +204,8 @@ if __name__ == '__main__':
         seconds = round(frame_id / frame_rate, 3)
         if args.stop > 0 and seconds > args.stop:
             break
+        if seconds < args.skip:
+            continue
 
         start_time = time.time()
 
@@ -221,7 +225,7 @@ if __name__ == '__main__':
             if args.capture and len(faces) > 0:
                 now = datetime.now()
                 filename = now.strftime('%Y%m%d_%H%M%S.%f')[:-3] + '.png'
-                pathname = os.path.join(capture_dir, filename)
+                pathname = os.path.join(args.capture, filename)
                 cv2.imwrite(pathname, frame)
                 num_capture += 1
             if args.display:
@@ -251,4 +255,3 @@ if __name__ == '__main__':
 
     pdb.save_db(result_dir)
     pdb.print_persons()
-

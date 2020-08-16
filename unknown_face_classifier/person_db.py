@@ -124,7 +124,7 @@ class PersonDB():
     def load_db(self, dir_name):
         if not os.path.isdir(dir_name):
             return
-        print("start loading persons in the directory", dir_name)
+        print("Start loading persons in the directory '%s'" % dir_name)
         start_time = time.time()
 
         # read face_encodings
@@ -148,7 +148,7 @@ class PersonDB():
                 else:
                     self.persons.append(person)
         elapsed_time = time.time() - start_time
-        print("loading persons finished in %.3f sec" % elapsed_time)
+        print("Loading persons finished in %.3f sec." % elapsed_time)
 
     def save_encodings(self, dir_name):
         face_encodings = {}
@@ -169,7 +169,7 @@ class PersonDB():
         print("montages saved")
 
     def save_db(self, dir_name):
-        print("start saving persons in the directory", dir_name)
+        print("Start saving persons in the directory '%s'" % dir_name)
         start_time = time.time()
         try:
             shutil.rmtree(dir_name)
@@ -185,7 +185,7 @@ class PersonDB():
         self.save_encodings(dir_name)
 
         elapsed_time = time.time() - start_time
-        print("saving persons finished in %.3f sec" % elapsed_time)
+        print("Saving persons finished in %.3f sec." % elapsed_time)
 
     def __repr__(self):
         s = "%d persons" % len(self.persons)
