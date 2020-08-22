@@ -11,10 +11,10 @@
 # Usage
 
 
-```
+```bash
 $ python face_classifier.py -h
 usage: face_classifier.py [-h] [-t THRESHOLD] [-S SECONDS] [-s STOP] [-k SKIP]
-                          [-d] [-c CAPTURE]
+                          [-d] [-c CAPTURE] [-r RESIZE_RATIO]
                           inputfile
 
 positional arguments:
@@ -31,6 +31,8 @@ optional arguments:
   -d, --display         display the frame in real time
   -c CAPTURE, --capture CAPTURE
                         save the frames with face in the CAPTURE directory
+  -r RESIZE_RATIO, --resize-ratio RESIZE_RATIO
+                        resize the frame to process (less time, less accuracy)
 ```
 
 # Result
@@ -46,76 +48,64 @@ You can remove or rename the `result` directory to prevent from loading.
 # Example Result
 
 Tested with this video in YouTube (La La Land, Someone in the Crowd)
+
 [![SomeoneInTheCrowd.mp4](https://img.youtube.com/vi/A7RmBgq4tT4/0.jpg)](https://www.youtube.com/watch?v=A7RmBgq4tT4)
 
-```
+```bash
 $ python face_classifier.py ~/Videos/SomeoneInTheCrowd.mp4 -t 0.55
 source /home/rostude/Videos/SomeoneInTheCrowd.mp4
-1280x512, 29.970030 frame/sec
-capture every 30 frame
+original: 1280x512, 29.970030 frame/sec
+process every 30 frame
 similarity shreshold: 0.55
-press ^C to stop detecting immediately
-frame 8310 @ time 277.277 takes 0.324 seconds - 9 persons, 180 known faces, 4 unknown faces
-similarities of persons:
-person1    [ 0.000 0.496 0.468 0.306 0.447 0.697 0.678 0.560 0.680 ]
-person2    [ 0.496 0.000 0.500 0.519 0.516 0.766 0.705 0.281 0.798 ]
-person3    [ 0.468 0.500 0.000 0.371 0.397 0.665 0.662 0.515 0.689 ]
-person4    [ 0.306 0.519 0.371 0.000 0.338 0.598 0.630 0.552 0.580 ]
-person5    [ 0.447 0.516 0.397 0.338 0.000 0.634 0.467 0.565 0.629 ]
-person6    [ 0.697 0.766 0.665 0.598 0.634 0.000 0.775 0.790 0.417 ]
-person7    [ 0.678 0.705 0.662 0.630 0.467 0.775 0.000 0.769 0.794 ]
-person8    [ 0.560 0.281 0.515 0.552 0.565 0.790 0.769 0.000 0.814 ]
-person9    [ 0.680 0.798 0.689 0.580 0.629 0.417 0.794 0.814 0.000 ]
-saving pictures in the directory 'SomeoneInTheCrowd'
+0 persons, 0 known faces, 0 unknown faces
+Press ^C to stop detecting...
+frame 8310 @ time 277.277 takes 0.326 second, 0 new faces -> 6 persons, 179 known faces, 5 unknown faces
+total elapsed time: 134.171 second
+Start saving persons in the directory 'result'
+montages saved
+result/face_encodings saved
+Saving persons finished in 0.701 sec.
+6 persons, 179 known faces, 5 unknown faces
+person_01  [ 0.000 0.492 0.441 0.339 0.428 0.647 ] 0.359, 0.407, 0.459, 13 faces
+person_02  [ 0.492 0.000 0.443 0.509 0.460 0.709 ] 0.227, 0.343, 0.565, 102 faces
+person_03  [ 0.441 0.443 0.000 0.367 0.358 0.610 ] 0.342, 0.395, 0.498, 16 faces
+person_04  [ 0.339 0.509 0.367 0.000 0.337 0.509 ] 0.349, 0.403, 0.464, 19 faces
+person_05  [ 0.428 0.460 0.358 0.337 0.000 0.571 ] 0.372, 0.422, 0.486, 21 faces
+person_06  [ 0.647 0.709 0.610 0.509 0.571 0.000 ] 0.223, 0.323, 0.424, 8 faces
 ```
 
-person1
+person_01
 <p align="center">
-   <img src="jpg/montage.person1-00.jpg">
+   <img src="jpg/montage.person_01-00.png">
 </p>
 
-person2
+person_02
 <p align="center">
-   <img src="jpg/montage.person2-00.jpg">
+   <img src="jpg/montage.person_02-00.png">
 </p>
 
-person3
+person_03
 <p align="center">
-   <img src="jpg/montage.person3-00.jpg">
+   <img src="jpg/montage.person_03-00.png">
 </p>
 
-person4
+person_04
 <p align="center">
-   <img src="jpg/montage.person4-00.jpg">
+   <img src="jpg/montage.person_04-00.png">
 </p>
 
-person5
+person_05
 <p align="center">
-   <img src="jpg/montage.person5-00.jpg">
+   <img src="jpg/montage.person_05-00.png">
 </p>
 
-person6
+person_06
 <p align="center">
-   <img src="jpg/montage.person6-00.jpg">
-</p>
-
-person7
-<p align="center">
-   <img src="jpg/montage.person7-00.jpg">
-</p>
-
-person8
-<p align="center">
-   <img src="jpg/montage.person8-00.jpg">
-</p>
-
-person9
-<p align="center">
-   <img src="jpg/montage.person9-00.jpg">
+   <img src="jpg/montage.person_06-00.png">
 </p>
 
 unknown_faces
 <p align="center">
-   <img src="jpg/montage.unknown_faces-00.jpg">
+   <img src="jpg/montage.unknowns-00.png">
 </p>
 

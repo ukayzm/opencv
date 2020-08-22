@@ -10,8 +10,9 @@ import cv2
 
 
 class FaceClassifier():
-    def __init__(self, threshold):
+    def __init__(self, threshold, ratio):
         self.similarity_threshold = threshold
+        self.ratio = ratio
 
     def get_face_image(self, frame, box):
         img_height, img_width = frame.shape[:2]
@@ -34,17 +35,40 @@ class FaceClassifier():
                                     pad_left, pad_right, cv2.BORDER_CONSTANT)
         return padded
 
+    # return list of dlib.rectangle
+    def locate_faces(self, frame):
+        #start_time = time.time()
+        if self.ratio == 1.0:
+            rgb = frame[:, :, ::-1]
+        else:
+            small_frame = cv2.resize(frame, (0, 0), fx=self.ratio, fy=self.ratio)
+            rgb = small_frame[:, :, ::-1]
+        boxes = face_recognition.face_locations(rgb)
+        #elapsed_time = time.time() - start_time
+        #print("locate_faces takes %.3f seconds" % elapsed_time)
+        if self.ratio == 1.0:
+            return boxes
+        boxes_org_size = []
+        for box in boxes:
+            (top, right, bottom, left) = box
+            left = int(left / ratio)
+            right = int(right / ratio)
+            top = int(top / ratio)
+            bottom = int(bottom / ratio)
+            box_org_size = (top, right, bottom, left)
+            boxes_org_size.append(box_org_size)
+        return boxes_org_size
+
     def detect_faces(self, frame):
-        rgb = frame[:, :, ::-1]
-        boxes = face_recognition.face_locations(rgb, model="hog")
-        if not boxes:
+        boxes = self.locate_faces(frame)
+        if len(boxes) == 0:
             return []
 
         # faces found
         faces = []
         now = datetime.now()
         str_ms = now.strftime('%Y%m%d_%H%M%S.%f')[:-3] + '-'
-        encodings = face_recognition.face_encodings(rgb, boxes)
+        encodings = face_recognition.face_encodings(frame, boxes)
         for i, box in enumerate(boxes):
             face_image = self.get_face_image(frame, box)
             face = Face(str_ms + str(i) + ".png", face_image, encodings[i])
@@ -145,6 +169,8 @@ if __name__ == '__main__':
                     help="display the frame in real time")
     ap.add_argument("-c", "--capture", type=str,
                     help="save the frames with face in the CAPTURE directory")
+    ap.add_argument("-r", "--resize-ratio", default=1.0, type=str,
+                    help="resize the frame to process (less time, less accuracy)")
     args = ap.parse_args()
 
     src_file = args.inputfile
@@ -162,7 +188,12 @@ if __name__ == '__main__':
     frames_between_capture = int(round(frame_rate * args.seconds))
 
     print("source", args.inputfile)
-    print("%dx%d, %f frame/sec" % (src.get(3), src.get(4), frame_rate))
+    print("original: %dx%d, %f frame/sec" % (src.get(3), src.get(4), frame_rate))
+    ratio = float(args.resize_ratio)
+    if ratio != 1.0:
+        s = "RESIZE_RATIO: " + args.resize_ratio
+        s += " -> %dx%d" % (int(src.get(3) * ratio), int(src.get(4) * ratio))
+        print(s)
     print("process every %d frame" % frames_between_capture)
     print("similarity shreshold:", args.threshold)
     if args.stop > 0:
@@ -191,10 +222,11 @@ if __name__ == '__main__':
     else:
         print("Press ^C to stop detecting...")
 
-    fc = FaceClassifier(args.threshold)
+    fc = FaceClassifier(args.threshold, ratio)
     frame_id = 0
     running = True
 
+    total_start_time = time.time()
     while running:
         ret, frame = src.read()
         if frame is None:
@@ -243,7 +275,7 @@ if __name__ == '__main__':
 
         s = "\rframe " + str(frame_id)
         s += " @ time %.3f" % seconds
-        s += " takes %.3f seconds" % elapsed_time
+        s += " takes %.3f second" % elapsed_time
         s += ", %d new faces" % len(faces)
         s += " -> " + repr(pdb)
         if num_capture > 0:
@@ -254,7 +286,9 @@ if __name__ == '__main__':
     signal.signal(signal.SIGINT, prev_handler)
     running = False
     src.release()
+    total_elapsed_time = time.time() - total_start_time
     print()
+    print("total elapsed time: %.3f second" % total_elapsed_time)
 
     pdb.save_db(result_dir)
     pdb.print_persons()
