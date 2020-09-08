@@ -7,12 +7,33 @@ import face_recognition
 import numpy as np
 from datetime import datetime
 import cv2
+import threading
+import time
+
+
+class Settings():
+    def __init__(self):
+        self.threshold = 0.44
+        self.spc = 1    # second per capture
+        self.resize_ratio = 1.0
+        self.source_file = '0'
+
+    def __repr__(self):
+        s = 'source_file = ' + self.source_file
+        s += '\nresize_ratio = ' + str(self.resize_ratio)
+        s += '\nsecond per capture = ' + str(self.spc)
+        s += '\nsimilarity threshold = ' + str(self.threshold)
+        return s
 
 
 class FaceClassifier():
-    def __init__(self, threshold, ratio):
-        self.similarity_threshold = threshold
-        self.ratio = ratio
+    def __init__(self, person_db):
+        self.settings = Settings()
+        self.on_new_person = None
+        self.last_frame = None
+        self.running = False
+        self.status_string = 'not running'
+        self.pdb = person_db
 
     def get_face_image(self, frame, box):
         img_height, img_width = frame.shape[:2]
@@ -38,15 +59,16 @@ class FaceClassifier():
     # return list of dlib.rectangle
     def locate_faces(self, frame):
         #start_time = time.time()
-        if self.ratio == 1.0:
+        ratio = self.settings.resize_ratio
+        if ratio == 1.0:
             rgb = frame[:, :, ::-1]
         else:
-            small_frame = cv2.resize(frame, (0, 0), fx=self.ratio, fy=self.ratio)
+            small_frame = cv2.resize(frame, (0, 0), fx=ratio, fy=ratio)
             rgb = small_frame[:, :, ::-1]
         boxes = face_recognition.face_locations(rgb)
         #elapsed_time = time.time() - start_time
         #print("locate_faces takes %.3f seconds" % elapsed_time)
-        if self.ratio == 1.0:
+        if ratio == 1.0:
             return boxes
         boxes_org_size = []
         for box in boxes:
@@ -85,7 +107,7 @@ class FaceClassifier():
         distances = face_recognition.face_distance(encodings, face.encoding)
         index = np.argmin(distances)
         min_value = distances[index]
-        if min_value < self.similarity_threshold:
+        if min_value < self.settings.threshold:
             # face of known person
             persons[index].add_face(face)
             # re-calculate encoding
@@ -104,7 +126,7 @@ class FaceClassifier():
         distances = face_recognition.face_distance(encodings, face.encoding)
         index = np.argmin(distances)
         min_value = distances[index]
-        if min_value < self.similarity_threshold:
+        if min_value < self.settings.threshold:
             # two faces are similar - create new person with two faces
             person = Person()
             newly_known_face = unknown_faces.pop(index)
@@ -147,11 +169,95 @@ class FaceClassifier():
         cv2.putText(frame, face.name, (left + 6, bottom + 30), font, 1.0,
                     (255, 255, 255), 1)
 
+    def set_on_new_person(self, on_new_person):
+        self.on_new_person = on_new_person
+
+    def start_running(self):
+        if self.running == True:
+            print('already running')
+            return
+
+        src_file = self.settings.source_file
+        if src_file == '0':
+            src_file = 0
+
+        src = cv2.VideoCapture(src_file)
+        if not src.isOpened():
+            self.error_string = "cannot open inputfile"
+            return -1
+
+        frame_width = src.get(cv2.CAP_PROP_FRAME_WIDTH)
+        frame_height = src.get(cv2.CAP_PROP_FRAME_HEIGHT)
+        self.frame_rate = src.get(5)
+        self.fpc = int(round(self.frame_rate * self.settings.spc))
+
+        s = "source " + self.settings.source_file
+        s += "\noriginal: %dx%d, %f frame/sec" % (src.get(3), src.get(4), self.frame_rate)
+        ratio = self.settings.resize_ratio
+        s += "\nRESIZE_RATIO: " + str(ratio)
+        s += " -> %dx%d" % (int(src.get(3) * ratio), int(src.get(4) * ratio))
+        self.source_info_string = s
+        print(s)
+
+        self.src = src
+        self.running = True
+        t = threading.Thread(target=self.run)
+        t.start()
+        return 0
+
+    def stop_running(self):
+        self.running = False
+
+    def run(self):
+        print('start running')
+
+        frame_id = 0
+        while self.running:
+            ret, frame = self.src.read()
+            if frame is None:
+                break
+
+            frame_id += 1
+            if frame_id % self.fpc != 0:
+                continue
+
+            seconds = round(frame_id / self.frame_rate, 3)
+            start_time = time.time()
+            self.process_frame(frame)
+
+            self.last_frame = frame
+            elapsed_time = time.time() - start_time
+            s = "frame " + str(frame_id)
+            s += " @ time %.3f" % seconds
+            s += " takes %.3f second" % elapsed_time
+            self.status_string = s
+            print(s)
+
+        print('stop running')
+        self.running = False
+        self.last_frame = None
+
+    # this is core
+    def process_frame(self, frame):
+        faces = self.detect_faces(frame)
+        for face in faces:
+            person = self.compare_with_known_persons(face, self.pdb.persons)
+            if person:
+                continue
+            person = self.compare_with_unknown_faces(face, self.pdb.unknown.faces)
+            if person:
+                self.pdb.persons.append(person)
+                if self.on_new_person:
+                    self.on_new_person(person)
+
+        # draw names
+        for face in faces:
+            self.draw_name(frame, face)
+
 
 if __name__ == '__main__':
     import argparse
     import signal
-    import time
     import os
 
     ap = argparse.ArgumentParser()

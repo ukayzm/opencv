@@ -1,6 +1,7 @@
 # Created by https://www.gitignore.io/api/c++,python,jupyternotebook
 
 .*.swp
+result/
 
 ### C++ ###
 # Prerequisites
