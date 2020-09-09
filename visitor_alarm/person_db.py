@@ -8,6 +8,7 @@ import face_recognition
 import numpy as np
 import time
 import pickle
+import random
 
 
 class Face():
@@ -95,6 +96,17 @@ class Person():
         if os.path.isdir(old_pathname):
             new_pathname = os.path.join(base_dir, self.name)
             os.rename(old_pathname, new_pathname)
+
+    def get_random_montage(self):
+        images = [random.choice(self.faces).image]
+        images.append(random.choice(self.faces).image)
+        images.append(random.choice(self.faces).image)
+        images.append(random.choice(self.faces).image)
+        return imutils.build_montages(images, (128, 128), (2, 2))[0]
+
+    def get_montage_2(self):
+        images = [face.image for face in self.faces]
+        return imutils.build_montages(images, (128, 128), (2, 1))[0]
 
     @classmethod
     def load(cls, pathname, face_encodings):
