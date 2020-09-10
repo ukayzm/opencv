@@ -104,6 +104,26 @@ class CmdSettings(CmdDefault):
         reply = self.tb.fc.settings.__repr__()
         context.bot.send_message(chat_id=chat_id, text=reply)
 
+class CmdShot(CmdDefault):
+    def method(self, update, context):
+        chat_id = update.effective_chat.id
+        if self.tb.fc.running:
+            image = self.tb.fc.last_frame
+            is_success, buf = cv2.imencode(".jpg", image)
+            bio = io.BytesIO(buf)
+            bio.seek(0)
+            context.bot.send_photo(chat_id=chat_id, photo=bio)
+        else:
+            reply = 'Face classifier is not running now.'
+            context.bot.send_message(chat_id=chat_id, text=reply)
+
+class CmdHelp(CmdDefault):
+    def method(self, update, context):
+        chat_id = update.effective_chat.id
+        usages = [cmd.usage() for cmd in self.tb.commands]
+        reply = '\n'.join(usages)
+        context.bot.send_message(chat_id=chat_id, text=reply)
+
 
 class VisitorAlarm():
     def __init__(self, token, face_classifier=None, person_db=None):
@@ -118,17 +138,16 @@ class VisitorAlarm():
         self.pdb = person_db
         self.alarm_receiver = None
 
-        self.usages = []
-        self.add_command(CmdName(self))
-        self.add_command(CmdList(self))
-        self.add_command(CmdStatus(self))
+        #self.usages = []
+        self.commands = []
+        self.add_command(CmdHelp(self))
+        self.add_command(CmdSettings(self))
         self.add_command(CmdStart(self))
         self.add_command(CmdStop(self))
-        self.add_command(CmdSettings(self))
-
-        # help command handler
-        handler = CommandHandler('help', self.help)
-        self.updater.dispatcher.add_handler(handler)
+        self.add_command(CmdStatus(self))
+        self.add_command(CmdShot(self))
+        self.add_command(CmdName(self))
+        self.add_command(CmdList(self))
 
         # unknown handler should be added last
         handler = MessageHandler(Filters.command, self.unknown)
@@ -141,7 +160,7 @@ class VisitorAlarm():
         self.updater.dispatcher.add_error_handler(self.error_callback)
 
     def add_command(self, handlerObj):
-        self.usages.append(handlerObj.usage())
+        self.commands.append(handlerObj)
         handler = CommandHandler(handlerObj.name, handlerObj.method)
         self.updater.dispatcher.add_handler(handler)
 
@@ -184,11 +203,6 @@ class VisitorAlarm():
         reply += "\nTry /help for available commands."
         context.bot.send_message(chat_id=chat_id, text=reply)
 
-    def help(self, update, context):
-        chat_id = update.effective_chat.id
-        reply = '\n'.join(self.usages)
-        context.bot.send_message(chat_id=chat_id, text=reply)
-
     def on_new_person(self, person):
         chat_id = self.alarm_receiver
         reply = "new person %s" % person.name
@@ -197,6 +211,7 @@ class VisitorAlarm():
         bio = io.BytesIO(buf)
         bio.seek(0)
         self.core.send_photo(chat_id=chat_id, photo=bio, caption=reply)
+        print(reply)
 
 
 if __name__ == '__main__':
