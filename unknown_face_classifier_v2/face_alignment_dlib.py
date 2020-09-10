@@ -3,6 +3,7 @@
 
 import numpy as np
 import cv2
+import dlib
 
 LEFT_EYE_INDICES = [36, 37, 38, 39, 40, 41]
 RIGHT_EYE_INDICES = [42, 43, 44, 45, 46, 47]
@@ -59,4 +60,18 @@ def rect_to_tuple(rect):
 def crop_image(image, det):
     left, top, right, bottom = rect_to_tuple(det)
     return image[top:bottom, left:right]
+
+def get_aligned_face(predictor, face_image):
+    height, width = face_image.shape[:2]
+    x = int(width / 3)
+    y = int(height / 3)
+    rect_of_face = dlib.rectangle(x, y, x*2, y*2)
+
+    # rotate the face image
+    rotated_image = rotate_face(predictor, face_image, rect_of_face)
+
+    # resize the image
+    resized_image = cv2.resize(rotated_image, dsize=(128*3, 128*3),
+                               interpolation=cv2.INTER_LINEAR)
+    return resized_image
 

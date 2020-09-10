@@ -4,7 +4,7 @@ import telegram
 from telegram.ext import Updater
 from telegram.ext import CommandHandler
 from telegram.ext import MessageHandler, Filters
-from telegram.error import (TelegramError, Unauthorized, BadRequest, 
+from telegram.error import (TelegramError, Unauthorized, BadRequest,
                             TimedOut, ChatMigrated, NetworkError)
 import logging
 import person_db
@@ -39,9 +39,9 @@ class CmdName(CmdDefault):
         args = update.message.text.split()
         if len(args) == 3:
             if self.tb.pdb.rename(args[1], args[2]) == 0:
-                reply = 'name changed ' + args[1] + ' -> ' + args[2]
+                reply = 'Name changed: ' + args[1] + ' -> ' + args[2]
             else:
-                reply = 'cannot change the person with name' + args[1]
+                reply = 'Cannot change the person with name ' + args[1]
         else:
             reply = 'usage: ' + self.usage()
         context.bot.send_message(chat_id=chat_id, text=reply)
@@ -49,17 +49,17 @@ class CmdName(CmdDefault):
 class CmdList(CmdDefault):
     def method(self, update, context):
         chat_id = update.effective_chat.id
+        if len(self.tb.pdb.persons) == 0:
+            reply = 'No persons in DB'
+            context.bot.send_message(chat_id=chat_id, text=reply)
+            return
         for person in self.tb.pdb.persons:
             reply = "%s with %d faces" % (person.name, len(person.faces))
             image = person.get_random_montage()
             is_success, buf = cv2.imencode(".jpg", image)
             bio = io.BytesIO(buf)
             bio.seek(0)
-            context.bot.send_photo(chat_id=chat_id, photo=bio,
-                                   caption=reply)
-        else:
-            reply = 'no persons'
-            context.bot.send_message(chat_id=chat_id, text=reply)
+            context.bot.send_photo(chat_id=chat_id, photo=bio, caption=reply)
 
 class CmdStatus(CmdDefault):
     def method(self, update, context):
@@ -70,28 +70,9 @@ class CmdStatus(CmdDefault):
             reply += '\n' + self.tb.fc.source_info_string
         context.bot.send_message(chat_id=chat_id, text=reply)
 
-class CmdThreshold(CmdDefault):
-    def usage(self):
-        return '/' + self.name + ' new_threshold'
-
-    def method(self, update, context):
-        chat_id = update.effective_chat.id
-        args = update.message.text.split()
-        if len(args) == 2:
-            new_threshold = float(args[1])
-            if new_threshold <= 0 or new_threshold >= 1:
-                reply = "threshold should between 0 to 1."
-            else:
-                self.tb.fc.settings.threshold = new_threshold
-                reply = self.tb.fc.settings.__repr__()
-        else:
-            reply = "usage: " + self.usage()
-        context.bot.send_message(chat_id=chat_id, text=reply)
-
 class CmdStart(CmdDefault):
     def method(self, update, context):
         chat_id = update.effective_chat.id
-        reply = self.tb.fc.settings.__repr__()
         if self.tb.fc.running:
             reply = 'Face classifier is running.'
         else:
@@ -101,6 +82,8 @@ class CmdStart(CmdDefault):
         if chat_id != self.tb.alarm_receiver:
             reply += '\nVisitor alarm will be sent to you'
             reply += ' (' + str(chat_id) + ').'
+            self.tb.alarm_receiver = chat_id
+        reply += '\n' + 'To stop face classifier, use command /stop.'
         context.bot.send_message(chat_id=chat_id, text=reply)
 
 class CmdStop(CmdDefault):
@@ -142,7 +125,6 @@ class VisitorAlarm():
         self.add_command(CmdStart(self))
         self.add_command(CmdStop(self))
         self.add_command(CmdSettings(self))
-        self.add_command(CmdThreshold(self))
 
         # help command handler
         handler = CommandHandler('help', self.help)
@@ -152,8 +134,7 @@ class VisitorAlarm():
         handler = MessageHandler(Filters.command, self.unknown)
         self.updater.dispatcher.add_handler(handler)
 
-        handler = MessageHandler(Filters.text & (~Filters.command),
-                                 self.unknown)
+        handler = MessageHandler(Filters.text & (~Filters.command), self.unknown)
         self.updater.dispatcher.add_handler(handler)
 
         # error handler
@@ -199,8 +180,8 @@ class VisitorAlarm():
 
     def unknown(self, update, context):
         chat_id = update.effective_chat.id
-        reply = '\n'.join(["Sorry, I didn't understand that command.",
-                           "Try /help for available commands"])
+        reply = "Sorry, I didn't understand that command."
+        reply += "\nTry /help for available commands."
         context.bot.send_message(chat_id=chat_id, text=reply)
 
     def help(self, update, context):
@@ -209,15 +190,13 @@ class VisitorAlarm():
         context.bot.send_message(chat_id=chat_id, text=reply)
 
     def on_new_person(self, person):
-        print('on_new_person', person.name)
         chat_id = self.alarm_receiver
         reply = "new person %s" % person.name
         image = person.get_montage_2()
         is_success, buf = cv2.imencode(".jpg", image)
         bio = io.BytesIO(buf)
         bio.seek(0)
-        self.core.send_photo(chat_id=chat_id, photo=bio,
-                             caption=reply)
+        self.core.send_photo(chat_id=chat_id, photo=bio, caption=reply)
 
 
 if __name__ == '__main__':

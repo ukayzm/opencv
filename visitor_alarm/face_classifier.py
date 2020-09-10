@@ -212,7 +212,7 @@ class FaceClassifier():
         self.status_string = 'Face classifier is not running.'
 
     def run(self):
-        print('Face classifier is started.')
+        print('Face classifier starts.')
         frame_id = 0
         i = 0
         processing_time = 0
@@ -237,7 +237,7 @@ class FaceClassifier():
             self.status_string = s
 
         self.stop_running()
-        print('Face classifier is stopped.')
+        print('Face classifier stops.')
         self.pdb.save_db()
         self.pdb.print_persons()
 

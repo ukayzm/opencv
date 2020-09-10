@@ -76,26 +76,21 @@ class FaceClassifier():
         for i, box in enumerate(boxes):
             # extract face image from frame
             face_image = self.get_face_image(frame, box)
-            height, width = face_image.shape[:2]
-            x = int(width / 3)
-            y = int(height / 3)
-            rect_of_face = dlib.rectangle(x, y, x*2, y*2)
 
-            # rotate the face image
-            rotated_image = face_alignment_dlib.rotate_face(self.predictor, face_image, rect_of_face)
-
-            # resize the image
-            resized_image = cv2.resize(rotated_image, dsize=(128*3, 128*3),
-                                       interpolation=cv2.INTER_LINEAR)
+            # get aligned image
+            aligned_image = face_alignment_dlib.get_aligned_face(self.predictor, face_image)
 
             # compute the encoding
-            box_of_face = (128, 128*2, 128*2, 128)
-            encoding = face_recognition.face_encodings(resized_image,
+            height, width = aligned_image.shape[:2]
+            x = int(width / 3)
+            y = int(height / 3)
+            box_of_face = (y, x*2, y*2, x)
+            encoding = face_recognition.face_encodings(aligned_image,
                                                        [box_of_face])[0]
 
             face = Face(str_ms + str(i) + ".png", face_image, encoding)
             face.location = box
-            cv2.imwrite(str_ms + str(i) + ".r.png", resized_image)
+            cv2.imwrite(str_ms + str(i) + ".r.png", aligned_image)
             faces.append(face)
         return faces
 
@@ -193,7 +188,7 @@ if __name__ == '__main__':
     ap.add_argument("-c", "--capture", type=str,
                     help="save the frames with face in the CAPTURE directory")
     ap.add_argument("-r", "--resize-ratio", default=1.0, type=str,
-                    help="resize the frame to process to reduce processing time")
+                    help="resize the frame to process (less time, less accuracy)")
     args = ap.parse_args()
 
     src_file = args.inputfile
@@ -249,6 +244,7 @@ if __name__ == '__main__':
     frame_id = 0
     running = True
 
+    total_start_time = time.time()
     while running:
         ret, frame = src.read()
         if frame is None:
@@ -297,19 +293,20 @@ if __name__ == '__main__':
 
         s = "\rframe " + str(frame_id)
         s += " @ time %.3f" % seconds
-        s += " takes %.3f seconds" % elapsed_time
+        s += " takes %.3f second" % elapsed_time
         s += ", %d new faces" % len(faces)
         s += " -> " + repr(pdb)
         if num_capture > 0:
             s += ", %d captures" % num_capture
         print(s, end="    ")
-        print()
 
     # restore SIGINT (^C) handler
     signal.signal(signal.SIGINT, prev_handler)
     running = False
     src.release()
+    total_elapsed_time = time.time() - total_start_time
     print()
+    print("total elapsed time: %.3f second" % total_elapsed_time)
 
     pdb.save_db(result_dir)
     pdb.print_persons()
