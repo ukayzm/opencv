@@ -76,30 +76,30 @@ class CmdStatus(CmdDefault):
 class CmdStart(CmdDefault):
     def method(self, update, context):
         chat_id = update.effective_chat.id
+        prev_alarm_receiver = self.tb.alarm_receiver
+        self.tb.alarm_receiver = chat_id
         if self.tb.fc.running:
-            reply = 'Face classifier is running.'
+            reply = 'Face classifier is already running.'
         else:
-            self.tb.fc.start_running()
-            reply = 'OK. Face classifier is started.'
-        reply += '\n' + self.tb.fc.source_info_string
-        if chat_id != self.tb.alarm_receiver:
+            reply = 'OK. Starting face classifier.'
+        if chat_id != prev_alarm_receiver:
             reply += '\nVisitor alarm will be sent to you'
             reply += ' (' + str(chat_id) + ').'
-            self.tb.alarm_receiver = chat_id
-        reply += '\n' + 'To stop face classifier, use command /stop.'
         context.bot.send_message(chat_id=chat_id, text=reply)
+        if not self.tb.fc.running:
+            self.tb.fc.start_running()
 
 class CmdStop(CmdDefault):
     def method(self, update, context):
         chat_id = update.effective_chat.id
         reply = self.tb.fc.settings.__repr__()
         if self.tb.fc.running:
-            self.tb.alarm_receiver = None
-            reply = 'OK. Stop face classifier.'
-            self.tb.fc.stop_running()
+            reply = 'OK. Stopping face classifier.'
         else:
             reply = 'Face classifier is not running now.'
         context.bot.send_message(chat_id=chat_id, text=reply)
+        if self.tb.fc.running:
+            self.tb.fc.stop_running()
 
 class CmdSettings(CmdDefault):
     def method(self, update, context):
@@ -128,7 +128,7 @@ class CmdHelp(CmdDefault):
         context.bot.send_message(chat_id=chat_id, text=reply)
 
 
-class VisitorAlarm():
+class VisitorAlarm(face_classifier.Observer):
     def __init__(self, token, face_classifier=None, person_db=None):
         logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 
@@ -137,8 +137,7 @@ class VisitorAlarm():
         self.updater = Updater(token=token, use_context=True)
 
         self.fc = face_classifier
-        self.fc.set_on_new_person(self.on_new_person)
-        self.fc.set_on_person(self.on_person)
+        self.fc.register_observer(self)
         self.pdb = person_db
         self.alarm_receiver = None
 
@@ -233,6 +232,20 @@ class VisitorAlarm():
         bio.seek(0)
         self.core.send_photo(chat_id=chat_id, photo=bio, caption=reply)
         logging.info(reply)
+
+    def on_start(self, fc):
+        chat_id = self.alarm_receiver
+        reply = 'Face classifier is started.'
+        reply += '\n' + fc.source_info_string
+        self.core.send_message(chat_id=chat_id, text=reply)
+        logging.info(reply)
+
+    def on_stop(self, fc):
+        chat_id = self.alarm_receiver
+        reply = 'Face classifier is stopped.'
+        self.core.send_message(chat_id=chat_id, text=reply)
+        logging.info(reply)
+        self.alarm_receiver = None
 
 
 if __name__ == '__main__':

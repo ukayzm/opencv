@@ -13,6 +13,46 @@ import time
 import traceback
 
 
+class Observer():
+    def on_start(self, fc):
+        pass
+
+    def on_stop(self, fc):
+        pass
+
+    def on_person(self, person):
+        pass
+
+    def on_new_person(self, person):
+        pass
+
+class Observable():
+    def __init__(self):
+        self.observers = []
+
+    def register_observer(self, observer):
+        self.observers.append(observer)
+
+    def remove_observer(self, observer):
+        self.observers.remove(observer)
+
+    def notify_person(self, person):
+        for observer in self.observers:
+            observer.on_person(person)
+
+    def notify_new_person(self, person):
+        for observer in self.observers:
+            observer.on_new_person(person)
+
+    def notify_start(self):
+        for observer in self.observers:
+            observer.on_start(self)
+
+    def notify_stop(self):
+        for observer in self.observers:
+            observer.on_stop(self)
+
+
 class Settings():
     def __init__(self):
         self.threshold = 0.44
@@ -27,15 +67,14 @@ class Settings():
         s += '\nsimilarity threshold = ' + str(self.threshold)
         return s
 
-class FaceClassifier():
+class FaceClassifier(Observable):
     def __init__(self, person_db, settings):
         self.settings = settings
-        self.on_new_person = None
-        self.on_person = None
         self.last_frame = None
         self.running = False
         self.status_string = 'Face classifier is not running.'
         self.pdb = person_db
+        Observable.__init__(self)
 
     def get_face_image(self, frame, box):
         img_height, img_width = frame.shape[:2]
@@ -171,12 +210,6 @@ class FaceClassifier():
         cv2.putText(frame, face.name, (left + 6, bottom + 30), font, 1.0,
                     (255, 255, 255), 1)
 
-    def set_on_new_person(self, on_new_person):
-        self.on_new_person = on_new_person
-
-    def set_on_person(self, on_person):
-        self.on_person = on_person
-
     def start_running(self):
         if self.running == True:
             print('already running')
@@ -204,7 +237,6 @@ class FaceClassifier():
         s += "\n* frame_rate: %.3f f/s" % self.frame_rate
         s += "\n* process every " + str(self.fpc) + " frames"
         self.source_info_string = s
-        print(s)
 
         self.src = src
         self.running = True
@@ -216,7 +248,7 @@ class FaceClassifier():
         self.status_string = 'Face classifier is not running.'
 
     def run(self):
-        print('Face classifier is started.')
+        self.notify_start()
         frame_id = 0
         i = 0
         processing_time = 0
@@ -247,9 +279,9 @@ class FaceClassifier():
 
         self.src.release()
         self.stop_running()
-        print('Face classifier is stopped.')
         self.pdb.save_db()
         self.pdb.print_persons()
+        self.notify_stop()
 
     # this is core
     def process_frame(self, frame):
@@ -257,15 +289,13 @@ class FaceClassifier():
         for face in faces:
             person = self.compare_with_known_persons(face, self.pdb.persons)
             if person:
-                if self.on_person:
-                    self.on_person(person)
+                self.notify_person(person)
                 person.update_last_face_time()
                 continue
             person = self.compare_with_unknown_faces(face, self.pdb.unknown.faces)
             if person:
                 self.pdb.persons.append(person)
-                if self.on_new_person:
-                    self.on_new_person(person)
+                self.notify_new_person(person)
                 person.update_last_face_time()
 
         # draw names
