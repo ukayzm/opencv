@@ -11,6 +11,9 @@ import person_db
 import face_classifier
 import io
 import cv2
+from datetime import datetime
+from datetime import timedelta
+import humanize
 
 
 class CmdDefault():
@@ -56,7 +59,7 @@ class CmdList(CmdDefault):
         for person in self.tb.pdb.persons:
             reply = "%s with %d faces" % (person.name, len(person.faces))
             image = person.get_random_montage()
-            is_success, buf = cv2.imencode(".jpg", image)
+            is_success, buf = cv2.imencode(".png", image)
             bio = io.BytesIO(buf)
             bio.seek(0)
             context.bot.send_photo(chat_id=chat_id, photo=bio, caption=reply)
@@ -109,7 +112,7 @@ class CmdShot(CmdDefault):
         chat_id = update.effective_chat.id
         if self.tb.fc.running:
             image = self.tb.fc.last_frame
-            is_success, buf = cv2.imencode(".jpg", image)
+            is_success, buf = cv2.imencode(".png", image)
             bio = io.BytesIO(buf)
             bio.seek(0)
             context.bot.send_photo(chat_id=chat_id, photo=bio)
@@ -135,6 +138,7 @@ class VisitorAlarm():
 
         self.fc = face_classifier
         self.fc.set_on_new_person(self.on_new_person)
+        self.fc.set_on_person(self.on_person)
         self.pdb = person_db
         self.alarm_receiver = None
 
@@ -205,13 +209,30 @@ class VisitorAlarm():
 
     def on_new_person(self, person):
         chat_id = self.alarm_receiver
-        reply = "new person %s" % person.name
+        reply = person.name + " appeared first"
         image = person.get_montage_2()
-        is_success, buf = cv2.imencode(".jpg", image)
+        is_success, buf = cv2.imencode(".png", image)
         bio = io.BytesIO(buf)
         bio.seek(0)
         self.core.send_photo(chat_id=chat_id, photo=bio, caption=reply)
-        print(reply)
+        logging.info(reply)
+
+    def on_person(self, person):
+        now = datetime.now()
+        td = timedelta(seconds=10)
+        if person.last_face_time + td > now:
+            return
+        # this person is detected again after for a while
+        chat_id = self.alarm_receiver
+        ago = now - person.last_face_time
+        reply = person.name + ' appeared again in ' + humanize.naturaldelta(ago)
+        reply += ' since ' + person.last_face_time.strftime('%Y-%m-%d %H:%M:%S')
+        image = person.get_montage_2()
+        is_success, buf = cv2.imencode(".png", image)
+        bio = io.BytesIO(buf)
+        bio.seek(0)
+        self.core.send_photo(chat_id=chat_id, photo=bio, caption=reply)
+        logging.info(reply)
 
 
 if __name__ == '__main__':

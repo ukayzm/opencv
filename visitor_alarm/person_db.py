@@ -9,6 +9,7 @@ import numpy as np
 import time
 import pickle
 import random
+from datetime import datetime
 
 
 class Face():
@@ -55,10 +56,17 @@ class Person():
                     Person._last_id = id
         self.encoding = None
         self.faces = []
+        self.last_face_time = datetime(1970, 1, 1, 0, 0, 0)
 
     def add_face(self, face):
         # add face
         self.faces.append(face)
+
+    def update_last_face_time(self):
+        face = self.faces[-1]
+        face_time = datetime.strptime(face.filename[:19], '%Y%m%d_%H%M%S.%f')
+        if face_time > self.last_face_time:
+            self.last_face_time = face_time
 
     def calculate_average_encoding(self):
         if len(self.faces) is 0:
@@ -105,7 +113,8 @@ class Person():
         return imutils.build_montages(images, (128, 128), (2, 2))[0]
 
     def get_montage_2(self):
-        images = [face.image for face in self.faces]
+        images = [random.choice(self.faces[0:-1]).image]
+        images.append(self.faces[-1].image)
         return imutils.build_montages(images, (128, 128), (2, 1))[0]
 
     @classmethod

@@ -10,6 +10,7 @@ from datetime import timedelta
 import cv2
 import threading
 import time
+import traceback
 
 
 class Settings():
@@ -26,11 +27,11 @@ class Settings():
         s += '\nsimilarity threshold = ' + str(self.threshold)
         return s
 
-
 class FaceClassifier():
     def __init__(self, person_db, settings):
         self.settings = settings
         self.on_new_person = None
+        self.on_person = None
         self.last_frame = None
         self.running = False
         self.status_string = 'Face classifier is not running.'
@@ -173,6 +174,9 @@ class FaceClassifier():
     def set_on_new_person(self, on_new_person):
         self.on_new_person = on_new_person
 
+    def set_on_person(self, on_person):
+        self.on_person = on_person
+
     def start_running(self):
         if self.running == True:
             print('already running')
@@ -217,24 +221,29 @@ class FaceClassifier():
         i = 0
         processing_time = 0
         while self.running:
-            ret, frame = self.src.read()
-            if frame is None:
+            try:
+                ret, frame = self.src.read()
+                if frame is None:
+                    break
+                frame_id += 1
+                if frame_id % self.fpc != 0:
+                    continue
+
+                start_time = time.time()
+                self.process_frame(frame)
+                processing_time += time.time() - start_time
+                i += 1
+                self.last_frame = frame
+
+                dt = timedelta(seconds=int(frame_id/self.frame_rate))
+                s = 'Face classifier running time: ' + str(dt) + '.'
+                s += '\nTotal ' + str(i) + ' frames are processed.'
+                s += '\nAverage processing time per frame is %.3f seconds.' % (processing_time / i)
+                self.status_string = s
+            except:
+                trackback.print_exc()
+                print('break loop...')
                 break
-            frame_id += 1
-            if frame_id % self.fpc != 0:
-                continue
-
-            start_time = time.time()
-            self.process_frame(frame)
-            processing_time += time.time() - start_time
-            i += 1
-            self.last_frame = frame
-
-            dt = timedelta(seconds=int(frame_id/self.frame_rate))
-            s = 'Face classifier running time: ' + str(dt) + '.'
-            s += '\nTotal ' + str(i) + ' frames are processed.'
-            s += '\nAverage processing time per frame is %.3f seconds.' % (processing_time / i)
-            self.status_string = s
 
         self.src.release()
         self.stop_running()
@@ -248,12 +257,16 @@ class FaceClassifier():
         for face in faces:
             person = self.compare_with_known_persons(face, self.pdb.persons)
             if person:
+                if self.on_person:
+                    self.on_person(person)
+                person.update_last_face_time()
                 continue
             person = self.compare_with_unknown_faces(face, self.pdb.unknown.faces)
             if person:
                 self.pdb.persons.append(person)
                 if self.on_new_person:
                     self.on_new_person(person)
+                person.update_last_face_time()
 
         # draw names
         for face in faces:
