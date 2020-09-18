@@ -1,11 +1,11 @@
-# Visitor Alarm
+# Visitor Alarm Telegram
 
 This is a Telegram Bot doing the folowings:
 
-* read video from web cam
-* detect faces in the frame
+* read video from web cam (or a video file)
+* detect faces in the picture
 * compare the face with the previously saved faces
-* if new person is detected, send a message via Telegram
+* if new person is detected or the person appears again, send a message via Telegram
 
 This code is highly refering to [unknown_face_classifier](https://github.com/ukayzm/opencv/tree/master/unknown_face_classifier). I recommend you to read it first.
 
@@ -38,7 +38,7 @@ Once you make the bot, execute visitor_alarm_telegram.py with the token as a par
 
 ```bash
 $ python visitor_alarm_telegram.py --token '1234567890:ABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHI'
-isitor Alarm Telegram is started.
+Visitor Alarm Telegram is started.
 * srcfile = 0 (webcam)
 * resize_ratio = 1.0
 * sbf (second between frame processed) = 0.5
@@ -63,7 +63,7 @@ Then, open a chat with the bot in Telegram app on your phone. Input `/start` to 
 | /stop | stop face classifier |
 | /status | show the status of person DB and face classifier |
 | /shot | show the current screen of web cam (or the video) |
-| /name old_name new_name | change the person's name |
+| /rename old_name new_name | change the person's name |
 | /list | list all persons with picture |
 
 # Screen shots
@@ -73,7 +73,7 @@ Then, open a chat with the bot in Telegram app on your phone. Input `/start` to 
 Show settings.
 
 <p align="center">
-   <img src="png/va_settings.png">
+   <img src="png/vat_settings.png">
 </p>
 
 ## start
@@ -81,15 +81,23 @@ Show settings.
 Start face classifier.
 
 <p align="center">
-   <img src="png/va_start.png">
+   <img src="png/vat_start.png">
 </p>
 
-## On New Person
+## On a person appeared first
 
 When new person is detected, a message is delivered to the user.
 
 <p align="center">
-   <img src="png/va_on_new_person.png">
+   <img src="png/vat_person_first.png">
+</p>
+
+## On the person appeared again
+
+When the person is detected again, a message is delivered to the user.
+
+<p align="center">
+   <img src="png/vat_person_again.png">
 </p>
 
 ## status
@@ -97,7 +105,7 @@ When new person is detected, a message is delivered to the user.
 Show the current status.
 
 <p align="center">
-   <img src="png/va_status.png">
+   <img src="png/vat_status.png">
 </p>
 
 ## stop
@@ -105,14 +113,30 @@ Show the current status.
 Stop face classifier.
 
 <p align="center">
-   <img src="png/va_stop.png">
+   <img src="png/vat_stop.png">
 </p>
 
-## name
+## shot
+
+You can see the screen shot of the current video.
+
+<p align="center">
+   <img src="png/vat_shot.png">
+</p>
+
+## rename
 
 You can change the name of person.
 
 <p align="center">
-   <img src="png/va_name.png">
+   <img src="png/vat_rename.png">
+</p>
+
+## list
+
+You can check the list of persons.
+
+<p align="center">
+   <img src="png/vat_list.png">
 </p>
 

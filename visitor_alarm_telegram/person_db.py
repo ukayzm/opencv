@@ -107,17 +107,13 @@ class Person():
             new_pathname = os.path.join(base_dir, self.name)
             os.rename(old_pathname, new_pathname)
 
-    def get_random_montage(self):
-        images = [random.choice(self.faces).image]
-        images.append(random.choice(self.faces).image)
-        images.append(random.choice(self.faces).image)
-        images.append(random.choice(self.faces).image)
-        return imutils.build_montages(images, (128, 128), (2, 2))[0]
-
-    def get_montage_2(self):
-        images = [random.choice(self.faces[0:-1]).image]
-        images.append(self.faces[-1].image)
-        return imutils.build_montages(images, (128, 128), (2, 1))[0]
+    def get_montage(self, x, y):
+        prev_faces = self.faces[0:-1]
+        faces = [random.choice(prev_faces) for i in range(0, x * y - 1)]
+        faces.append(self.faces[-1])
+        faces.sort(key=lambda x: x.filename)
+        images = [face.image for face in faces]
+        return imutils.build_montages(images, (128, 128), (x, y))[0]
 
     @classmethod
     def load(cls, pathname, face_encodings):
@@ -257,6 +253,7 @@ class PersonDB():
         for person in self.persons:
             if person.name == old_name:
                 person.rename(dir_name, new_name)
+                self.persons.sort()
                 return 0
         return 1
 

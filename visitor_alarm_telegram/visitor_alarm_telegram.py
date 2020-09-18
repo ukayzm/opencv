@@ -33,7 +33,7 @@ class CmdDefault():
         context.bot.send_message(chat_id=chat_id, text=reply)
 
 
-class CmdName(CmdDefault):
+class CmdRename(CmdDefault):
     def usage(self):
         return '/' + self.name + ' old_name new_name'
 
@@ -58,7 +58,7 @@ class CmdList(CmdDefault):
             return
         for person in self.vat.pdb.persons:
             reply = "%s with %d faces" % (person.name, len(person.faces))
-            image = person.get_random_montage()
+            image = person.get_montage(3, 2)
             is_success, buf = cv2.imencode(".png", image)
             bio = io.BytesIO(buf)
             bio.seek(0)
@@ -148,7 +148,7 @@ class VisitorAlarmTelegram(face_classifier.Observer):
         self.add_command(CmdStop(self))
         self.add_command(CmdStatus(self))
         self.add_command(CmdShot(self))
-        self.add_command(CmdName(self))
+        self.add_command(CmdRename(self))
         self.add_command(CmdList(self))
 
         # unknown handler should be added last
@@ -212,7 +212,7 @@ class VisitorAlarmTelegram(face_classifier.Observer):
     def on_new_person(self, person):
         chat_id = self.alarm_receiver
         reply = person.name + " appeared first"
-        image = person.get_montage_2()
+        image = person.get_montage(2, 1)
         is_success, buf = cv2.imencode(".png", image)
         bio = io.BytesIO(buf)
         bio.seek(0)
@@ -229,7 +229,7 @@ class VisitorAlarmTelegram(face_classifier.Observer):
         ago = now - person.last_face_time
         reply = person.name + ' appeared again in ' + humanize.naturaldelta(ago)
         reply += ' since ' + person.last_face_time.strftime('%Y-%m-%d %H:%M:%S')
-        image = person.get_montage_2()
+        image = person.get_montage(2, 1)
         is_success, buf = cv2.imencode(".png", image)
         bio = io.BytesIO(buf)
         bio.seek(0)
