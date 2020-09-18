@@ -63,6 +63,8 @@ class Person():
         self.faces.append(face)
 
     def update_last_face_time(self):
+        if len(self.faces) == 0:
+            return
         face = self.faces[-1]
         face_time = datetime.strptime(face.filename[:19], '%Y%m%d_%H%M%S.%f')
         if face_time > self.last_face_time:
@@ -92,7 +94,7 @@ class Person():
 
     def save_montages(self, base_dir):
         images = [face.image for face in self.faces]
-        montages = imutils.build_montages(images, (128, 128), (6, 2))
+        montages = imutils.build_montages(images, (128, 128), (6, 4))
         for i, montage in enumerate(montages):
             filename = "montage." + self.name + ("-%02d.png" % i)
             pathname = os.path.join(base_dir, filename)
@@ -137,8 +139,23 @@ class Person():
                 face = Face(face_filename, image, face_encoding)
                 person.faces.append(face)
         print(person.name, "has", len(person.faces), "faces")
+        person.faces.sort(key=lambda x: x.filename)
+        person.update_last_face_time()
         person.calculate_average_encoding()
         return person
+
+    def __eq__(self, other):
+        return self.name == other.name
+
+    def __lt__(self, other):
+        if self.name.startswith('person_'):
+            if other.name.startswith('person_'):
+                return self.name < other.name
+            return False
+        if other.name.startswith('person_'):
+            return True
+        return self.name < other.name
+
 
 class PersonDB():
     DEFAULT_RESULT_DIR = "result"
@@ -175,6 +192,7 @@ class PersonDB():
                     self.unknown = person
                 else:
                     self.persons.append(person)
+        self.persons.sort()
         elapsed_time = time.time() - start_time
         print("Loading persons finished in %.3f sec." % elapsed_time)
 
@@ -224,7 +242,7 @@ class PersonDB():
 
     def print_persons(self):
         print(self)
-        persons = sorted(self.persons, key=lambda obj : obj.name)
+        persons = self.persons
         encodings = [person.encoding for person in persons]
         for person in persons:
             distances = face_recognition.face_distance(encodings, person.encoding)

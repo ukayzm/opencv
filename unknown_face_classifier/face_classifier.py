@@ -169,7 +169,7 @@ if __name__ == '__main__':
                     help="display the frame in real time")
     ap.add_argument("-c", "--capture", type=str,
                     help="save the frames with face in the CAPTURE directory")
-    ap.add_argument("-r", "--resize-ratio", default=1.0, type=str,
+    ap.add_argument("-r", "--resize-ratio", default=1.0, type=float,
                     help="resize the frame to process (less time, less accuracy)")
     args = ap.parse_args()
 

@@ -12,29 +12,45 @@ This code is highly refering to [unknown_face_classifier](https://github.com/uka
 # Usage
 
 ```bash
-$ python visitor_alarm.py -h
-usage: visitor_alarm.py [-h] --token TOKEN [--srcfile SRCFILE]
+$ python visitor_alarm_telegram.py -h
+usage: visitor_alarm_telegram.py [-h] --token TOKEN [--srcfile SRCFILE]
+                                 [--threshold THRESHOLD] [--sbf SBF]
+                                 [--resize-ratio RESIZE_RATIO]
+                                 [--appearance-interval APPEARANCE_INTERVAL]
 
 optional arguments:
-  -h, --help         show this help message and exit
-  --token TOKEN      Telegram Bot Token
-  --srcfile SRCFILE  Video file to process. If not specified, web cam is used.
+  -h, --help            show this help message and exit
+  --token TOKEN         Telegram Bot Token
+  --srcfile SRCFILE     Video file to process. If not specified, web cam is
+                        used.
+  --threshold THRESHOLD
+                        threshold of the similarity (default=0.42)
+  --sbf SBF             second between frame processed (default=0.5)
+  --resize-ratio RESIZE_RATIO
+                        resize the frame to process (less time, less accuracy)
+  --appearance-interval APPEARANCE_INTERVAL
+                        alarm interval second between appearance (default=10)
 ```
 
 You have to make a Telegram bot before doing this. Please search Google for how to make a Telegram Bot.
 
-Once you make the bot, execute visitor_alarm.py with the token as a parameter.
+Once you make the bot, execute visitor_alarm_telegram.py with the token as a parameter.
 
 ```bash
-$ python visitor_alarm.py --token '1234567890:ABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHI'
-telegram bot with token 1234567890:ABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHI
+$ python visitor_alarm_telegram.py --token '1234567890:ABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHI'
+isitor Alarm Telegram is started.
+* srcfile = 0 (webcam)
+* resize_ratio = 1.0
+* sbf (second between frame processed) = 0.5
+* similarity threshold = 0.42
+* appearance_interval = 10
 press ^C to stop...
 ```
 
 Or you can specify `--srcfile` parameter to use a video file instead of webcam. This is useful for the testing purpose.
 
 ```bash
-$ python visitor_alarm.py --token '1234567890:ABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHI' --srcfile ~/Videos/prc.mp4
+$ python visitor_alarm_telegram.py --token '1234567890:ABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHI' --srcfile ~/Videos/extj.mp4
 ```
 
 Then, open a chat with the bot in Telegram app on your phone. Input `/start` to start face classifier. Input `/help` for more commands.

@@ -21,7 +21,7 @@ class CmdDefault():
         if name is None:
             name = self.__class__.__name__[3:].lower()
         self.name = name
-        self.tb = telegram_bot
+        self.vat = telegram_bot
 
     def usage(self):
         return '/' + self.name
@@ -41,7 +41,7 @@ class CmdName(CmdDefault):
         chat_id = update.effective_chat.id
         args = update.message.text.split()
         if len(args) == 3:
-            if self.tb.pdb.rename(args[1], args[2]) == 0:
+            if self.vat.pdb.rename(args[1], args[2]) == 0:
                 reply = 'Name changed: ' + args[1] + ' -> ' + args[2]
             else:
                 reply = 'Cannot change the person with name ' + args[1]
@@ -52,11 +52,11 @@ class CmdName(CmdDefault):
 class CmdList(CmdDefault):
     def method(self, update, context):
         chat_id = update.effective_chat.id
-        if len(self.tb.pdb.persons) == 0:
+        if len(self.vat.pdb.persons) == 0:
             reply = 'No persons in DB'
             context.bot.send_message(chat_id=chat_id, text=reply)
             return
-        for person in self.tb.pdb.persons:
+        for person in self.vat.pdb.persons:
             reply = "%s with %d faces" % (person.name, len(person.faces))
             image = person.get_random_montage()
             is_success, buf = cv2.imencode(".png", image)
@@ -67,51 +67,49 @@ class CmdList(CmdDefault):
 class CmdStatus(CmdDefault):
     def method(self, update, context):
         chat_id = update.effective_chat.id
-        reply = 'In person DB, ' + self.tb.pdb.__repr__()
-        reply += '\n' + self.tb.fc.status_string
-        if self.tb.fc.running is True:
-            reply += '\n' + self.tb.fc.source_info_string
+        reply = 'In person DB, ' + self.vat.pdb.__repr__()
+        reply += '\n' + self.vat.fc.status_string
+        if self.vat.fc.running is True:
+            reply += '\n' + self.vat.fc.source_info_string
         context.bot.send_message(chat_id=chat_id, text=reply)
 
 class CmdStart(CmdDefault):
     def method(self, update, context):
         chat_id = update.effective_chat.id
-        prev_alarm_receiver = self.tb.alarm_receiver
-        self.tb.alarm_receiver = chat_id
-        if self.tb.fc.running:
+        if self.vat.fc.running:
             reply = 'Face classifier is already running.'
         else:
             reply = 'OK. Starting face classifier.'
-        if chat_id != prev_alarm_receiver:
-            reply += '\nVisitor alarm will be sent to you'
-            reply += ' (' + str(chat_id) + ').'
+        if chat_id != self.vat.alarm_receiver:
+            reply += '\nVisitor alarm will be sent to you.'
+            self.vat.alarm_receiver = chat_id
         context.bot.send_message(chat_id=chat_id, text=reply)
-        if not self.tb.fc.running:
-            self.tb.fc.start_running()
+        if not self.vat.fc.running:
+            self.vat.fc.start_running()
 
 class CmdStop(CmdDefault):
     def method(self, update, context):
         chat_id = update.effective_chat.id
-        reply = self.tb.fc.settings.__repr__()
-        if self.tb.fc.running:
+        reply = self.vat.fc.settings.__repr__()
+        if self.vat.fc.running:
             reply = 'OK. Stopping face classifier.'
         else:
             reply = 'Face classifier is not running now.'
         context.bot.send_message(chat_id=chat_id, text=reply)
-        if self.tb.fc.running:
-            self.tb.fc.stop_running()
+        if self.vat.fc.running:
+            self.vat.fc.stop_running()
 
 class CmdSettings(CmdDefault):
     def method(self, update, context):
         chat_id = update.effective_chat.id
-        reply = self.tb.fc.settings.__repr__()
+        reply = self.vat.str_settings()
         context.bot.send_message(chat_id=chat_id, text=reply)
 
 class CmdShot(CmdDefault):
     def method(self, update, context):
         chat_id = update.effective_chat.id
-        if self.tb.fc.running:
-            image = self.tb.fc.last_frame
+        if self.vat.fc.running:
+            image = self.vat.fc.last_frame
             is_success, buf = cv2.imencode(".png", image)
             bio = io.BytesIO(buf)
             bio.seek(0)
@@ -123,22 +121,23 @@ class CmdShot(CmdDefault):
 class CmdHelp(CmdDefault):
     def method(self, update, context):
         chat_id = update.effective_chat.id
-        usages = [cmd.usage() for cmd in self.tb.commands]
+        usages = [cmd.usage() for cmd in self.vat.commands]
         reply = '\n'.join(usages)
         context.bot.send_message(chat_id=chat_id, text=reply)
 
 
-class VisitorAlarm(face_classifier.Observer):
-    def __init__(self, token, face_classifier=None, person_db=None):
-        logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
+class VisitorAlarmTelegram(face_classifier.Observer):
+    def __init__(self, face_classifier, person_db, settings):
+        logging.basicConfig(format='%(asctime)s - %(message)s',
+                            level=logging.INFO)
 
-        self.token = token
-        self.core = telegram.Bot(token)
-        self.updater = Updater(token=token, use_context=True)
+        self.core = telegram.Bot(settings.token)
+        self.updater = Updater(token=settings.token, use_context=True)
 
         self.fc = face_classifier
         self.fc.register_observer(self)
         self.pdb = person_db
+        self.settings = settings
         self.alarm_receiver = None
 
         #self.usages = []
@@ -192,6 +191,9 @@ class VisitorAlarm(face_classifier.Observer):
             print("TelegramError error")
 
     def start_polling(self):
+        print("Visitor Alarm Telegram is started.")
+        print(self.str_settings())
+        print("press ^C to stop...")
         self.updater.start_polling()
 
     def stop(self):
@@ -199,6 +201,7 @@ class VisitorAlarm(face_classifier.Observer):
 
     def idle(self):
         self.updater.idle()
+        print("Visitor Alarm Telegram is finished.")
 
     def unknown(self, update, context):
         chat_id = update.effective_chat.id
@@ -218,7 +221,7 @@ class VisitorAlarm(face_classifier.Observer):
 
     def on_person(self, person):
         now = datetime.now()
-        td = timedelta(seconds=10)
+        td = timedelta(seconds=self.settings.appearance_interval)
         if person.last_face_time + td > now:
             return
         # this person is detected again after for a while
@@ -247,6 +250,16 @@ class VisitorAlarm(face_classifier.Observer):
         logging.info(reply)
         self.alarm_receiver = None
 
+    def str_settings(self):
+        s = '* srcfile = ' + self.settings.srcfile
+        if self.settings.srcfile == '0':
+            s += ' (webcam)'
+        s += '\n* resize_ratio = ' + str(self.settings.resize_ratio)
+        s += '\n* sbf (second between frame processed) = ' + str(self.settings.sbf)
+        s += '\n* similarity threshold = ' + str(self.settings.threshold)
+        s += '\n* appearance_interval = ' + str(self.settings.appearance_interval)
+        return s
+
 
 if __name__ == '__main__':
     import argparse
@@ -256,21 +269,24 @@ if __name__ == '__main__':
                     help="Telegram Bot Token")
     ap.add_argument("--srcfile", type=str, default='0',
                     help="Video file to process. If not specified, web cam is used.")
+    ap.add_argument("--threshold", default=0.42, type=float,
+                    help="threshold of the similarity (default=0.42)")
+    ap.add_argument("--sbf", default=0.5, type=float,
+                    help="second between frame processed (default=0.5)")
+    ap.add_argument("--resize-ratio", default=1.0, type=float,
+                    help="resize the frame to process (less time, less accuracy)")
+    ap.add_argument("--appearance-interval", default=10, type=int,
+                    help="alarm interval second between appearance (default=10)")
     args = ap.parse_args()
 
     dir_name = "result"
     pdb = person_db.PersonDB()
     pdb.load_db()
 
-    settings = face_classifier.Settings()
-    settings.source_file = args.srcfile
-    fc = face_classifier.FaceClassifier(pdb, settings)
+    fc = face_classifier.FaceClassifier(pdb, args)
 
-    bot = VisitorAlarm(args.token, face_classifier=fc, person_db=pdb)
-    bot.start_polling()
-    print("telegram bot with token", args.token)
-    print("press ^C to stop...")
-    bot.idle()
+    vat = VisitorAlarmTelegram(fc, pdb, args)
+    vat.start_polling()
+    vat.idle()
     fc.stop_running()
-    print("telegram bot finished")
 

@@ -53,20 +53,6 @@ class Observable():
             observer.on_stop(self)
 
 
-class Settings():
-    def __init__(self):
-        self.threshold = 0.44
-        self.spc = 1    # second per process
-        self.resize_ratio = 1.0
-        self.source_file = '0'
-
-    def __repr__(self):
-        s = 'source_file = ' + self.source_file
-        s += '\nresize_ratio = ' + str(self.resize_ratio)
-        s += '\nsecond per process = ' + str(self.spc)
-        s += '\nsimilarity threshold = ' + str(self.threshold)
-        return s
-
 class FaceClassifier(Observable):
     def __init__(self, person_db, settings):
         self.settings = settings
@@ -215,7 +201,7 @@ class FaceClassifier(Observable):
             print('already running')
             return
 
-        src_file = self.settings.source_file
+        src_file = self.settings.srcfile
         if src_file == '0':
             src_file = 0
 
@@ -227,15 +213,17 @@ class FaceClassifier(Observable):
         frame_width = src.get(cv2.CAP_PROP_FRAME_WIDTH)
         frame_height = src.get(cv2.CAP_PROP_FRAME_HEIGHT)
         self.frame_rate = src.get(5)
-        self.fpc = int(round(self.frame_rate * self.settings.spc))
+        self.frames_to_skip = int(round(self.frame_rate * self.settings.sbf))
 
-        s = "* source_file: " + self.settings.source_file
-        s += "\n* size: %dx%d" % (src.get(3), src.get(4))
+        s = "* srcfile = " + self.settings.srcfile
+        if self.settings.srcfile == '0':
+            s += ' (webcam)'
+        s += "\n* size = %dx%d" % (src.get(3), src.get(4))
         ratio = self.settings.resize_ratio
-        s += "\n* resize_ratio: " + str(ratio)
+        s += "\n* resize_ratio = " + str(ratio)
         s += " -> %dx%d" % (int(src.get(3) * ratio), int(src.get(4) * ratio))
-        s += "\n* frame_rate: %.3f f/s" % self.frame_rate
-        s += "\n* process every " + str(self.fpc) + " frames"
+        s += "\n* frame_rate = %.3f f/s" % self.frame_rate
+        s += "\n* process every " + str(self.frames_to_skip) + " frames"
         self.source_info_string = s
 
         self.src = src
@@ -258,7 +246,7 @@ class FaceClassifier(Observable):
                 if frame is None:
                     break
                 frame_id += 1
-                if frame_id % self.fpc != 0:
+                if frame_id % self.frames_to_skip != 0:
                     continue
 
                 start_time = time.time()
