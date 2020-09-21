@@ -1,4 +1,4 @@
-# Visitor Alarm Telegram
+# Visitor Alarm Telegram Bot
 
 This is a Telegram Bot doing the folowings:
 
@@ -12,8 +12,8 @@ This code is highly refering to [unknown_face_classifier](https://github.com/uka
 # Usage
 
 ```bash
-$ python visitor_alarm_telegram.py -h
-usage: visitor_alarm_telegram.py [-h] --token TOKEN [--srcfile SRCFILE]
+$ python visitor_alarm_telegram_bot.py -h
+usage: visitor_alarm_telegram_bot.py [-h] --token TOKEN [--srcfile SRCFILE]
                                  [--threshold THRESHOLD] [--sbf SBF]
                                  [--resize-ratio RESIZE_RATIO]
                                  [--appearance-interval APPEARANCE_INTERVAL]
@@ -34,11 +34,11 @@ optional arguments:
 
 You have to make a Telegram bot before doing this. Please search Google for how to make a Telegram Bot.
 
-Once you make the bot, execute visitor_alarm_telegram.py with the token as a parameter.
+Once you make the bot, execute visitor_alarm_telegram_bot.py with the token as a parameter.
 
 ```bash
-$ python visitor_alarm_telegram.py --token '1234567890:ABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHI'
-Visitor Alarm Telegram is started.
+$ python visitor_alarm_telegram_bot.py --token '1234567890:ABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHI'
+Visitor Alarm Telegram Bot is started.
 * srcfile = 0 (webcam)
 * resize_ratio = 1.0
 * sbf (second between frame processed) = 0.5
@@ -50,7 +50,7 @@ press ^C to stop...
 Or you can specify `--srcfile` parameter to use a video file instead of webcam. This is useful for the testing purpose.
 
 ```bash
-$ python visitor_alarm_telegram.py --token '1234567890:ABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHI' --srcfile ~/Videos/extj.mp4
+$ python visitor_alarm_telegram_bot.py --token '1234567890:ABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHI' --srcfile ~/Videos/extj.mp4
 ```
 
 Then, open a chat with the bot in Telegram app on your phone. Input `/start` to start face classifier. Input `/help` for more commands.
@@ -140,3 +140,4 @@ You can check the list of persons.
    <img src="png/vat_list.png">
 </p>
 
+Visit [https://ukayzm.github.io/visitor-alarm-telegram-bot/](https://ukayzm.github.io/visitor-alarm-telegram-bot/) for more information.

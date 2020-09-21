@@ -17,11 +17,9 @@ import humanize
 
 
 class CmdDefault():
-    def __init__(self, telegram_bot, name=None):
-        if name is None:
-            name = self.__class__.__name__[3:].lower()
-        self.name = name
-        self.vat = telegram_bot
+    def __init__(self, telegram_bot):
+        self.name = self.__class__.__name__[3:].lower()
+        self.vatb = telegram_bot
 
     def usage(self):
         return '/' + self.name
@@ -41,7 +39,7 @@ class CmdRename(CmdDefault):
         chat_id = update.effective_chat.id
         args = update.message.text.split()
         if len(args) == 3:
-            if self.vat.pdb.rename(args[1], args[2]) == 0:
+            if self.vatb.pdb.rename(args[1], args[2]) == 0:
                 reply = 'Name changed: ' + args[1] + ' -> ' + args[2]
             else:
                 reply = 'Cannot change the person with name ' + args[1]
@@ -52,11 +50,11 @@ class CmdRename(CmdDefault):
 class CmdList(CmdDefault):
     def method(self, update, context):
         chat_id = update.effective_chat.id
-        if len(self.vat.pdb.persons) == 0:
+        if len(self.vatb.pdb.persons) == 0:
             reply = 'No persons in DB'
             context.bot.send_message(chat_id=chat_id, text=reply)
             return
-        for person in self.vat.pdb.persons:
+        for person in self.vatb.pdb.persons:
             reply = "%s with %d faces" % (person.name, len(person.faces))
             image = person.get_montage(3, 2)
             is_success, buf = cv2.imencode(".png", image)
@@ -67,49 +65,49 @@ class CmdList(CmdDefault):
 class CmdStatus(CmdDefault):
     def method(self, update, context):
         chat_id = update.effective_chat.id
-        reply = 'In person DB, ' + self.vat.pdb.__repr__()
-        reply += '\n' + self.vat.fc.status_string
-        if self.vat.fc.running is True:
-            reply += '\n' + self.vat.fc.source_info_string
+        reply = 'In person DB, ' + self.vatb.pdb.__repr__()
+        reply += '\n' + self.vatb.fc.status_string
+        if self.vatb.fc.running is True:
+            reply += '\n' + self.vatb.fc.source_info_string
         context.bot.send_message(chat_id=chat_id, text=reply)
 
 class CmdStart(CmdDefault):
     def method(self, update, context):
         chat_id = update.effective_chat.id
-        if self.vat.fc.running:
+        if self.vatb.fc.running:
             reply = 'Face classifier is already running.'
         else:
             reply = 'OK. Starting face classifier.'
-        if chat_id != self.vat.alarm_receiver:
+        if chat_id != self.vatb.alarm_receiver:
             reply += '\nVisitor alarm will be sent to you.'
-            self.vat.alarm_receiver = chat_id
+            self.vatb.alarm_receiver = chat_id
         context.bot.send_message(chat_id=chat_id, text=reply)
-        if not self.vat.fc.running:
-            self.vat.fc.start_running()
+        if not self.vatb.fc.running:
+            self.vatb.fc.start_running()
 
 class CmdStop(CmdDefault):
     def method(self, update, context):
         chat_id = update.effective_chat.id
-        reply = self.vat.fc.settings.__repr__()
-        if self.vat.fc.running:
+        reply = self.vatb.fc.settings.__repr__()
+        if self.vatb.fc.running:
             reply = 'OK. Stopping face classifier.'
         else:
             reply = 'Face classifier is not running now.'
         context.bot.send_message(chat_id=chat_id, text=reply)
-        if self.vat.fc.running:
-            self.vat.fc.stop_running()
+        if self.vatb.fc.running:
+            self.vatb.fc.stop_running()
 
 class CmdSettings(CmdDefault):
     def method(self, update, context):
         chat_id = update.effective_chat.id
-        reply = self.vat.str_settings()
+        reply = self.vatb.str_settings()
         context.bot.send_message(chat_id=chat_id, text=reply)
 
 class CmdShot(CmdDefault):
     def method(self, update, context):
         chat_id = update.effective_chat.id
-        if self.vat.fc.running:
-            image = self.vat.fc.last_frame
+        if self.vatb.fc.running:
+            image = self.vatb.fc.last_frame
             is_success, buf = cv2.imencode(".png", image)
             bio = io.BytesIO(buf)
             bio.seek(0)
@@ -121,26 +119,26 @@ class CmdShot(CmdDefault):
 class CmdHelp(CmdDefault):
     def method(self, update, context):
         chat_id = update.effective_chat.id
-        usages = [cmd.usage() for cmd in self.vat.commands]
+        usages = [cmd.usage() for cmd in self.vatb.commands]
         reply = '\n'.join(usages)
         context.bot.send_message(chat_id=chat_id, text=reply)
 
 
-class VisitorAlarmTelegram(face_classifier.Observer):
+class VisitorAlarmTelegramBot(face_classifier.Observer):
     def __init__(self, face_classifier, person_db, settings):
-        logging.basicConfig(format='%(asctime)s - %(message)s',
-                            level=logging.INFO)
-
-        self.core = telegram.Bot(settings.token)
-        self.updater = Updater(token=settings.token, use_context=True)
-
         self.fc = face_classifier
-        self.fc.register_observer(self)
         self.pdb = person_db
         self.settings = settings
         self.alarm_receiver = None
 
-        #self.usages = []
+        logging.basicConfig(format='%(asctime)s - %(message)s',
+                            level=logging.INFO)
+
+        # create Telegram Bot
+        self.updater = Updater(token=settings.token, use_context=True)
+        self.core = telegram.Bot(settings.token)
+
+        # add command handlers
         self.commands = []
         self.add_command(CmdHelp(self))
         self.add_command(CmdSettings(self))
@@ -191,7 +189,7 @@ class VisitorAlarmTelegram(face_classifier.Observer):
             print("TelegramError error")
 
     def start_polling(self):
-        print("Visitor Alarm Telegram is started.")
+        print("Visitor Alarm Telegram Bot is started.")
         print(self.str_settings())
         print("press ^C to stop...")
         self.updater.start_polling()
@@ -201,17 +199,18 @@ class VisitorAlarmTelegram(face_classifier.Observer):
 
     def idle(self):
         self.updater.idle()
-        print("Visitor Alarm Telegram is finished.")
+        print("Visitor Alarm Telegram Bot is finished.")
 
     def unknown(self, update, context):
         chat_id = update.effective_chat.id
+        print(update.message.text)
         reply = "Sorry, I didn't understand that command."
         reply += "\nTry /help for available commands."
         context.bot.send_message(chat_id=chat_id, text=reply)
 
     def on_new_person(self, person):
         chat_id = self.alarm_receiver
-        reply = person.name + " appeared first"
+        reply = person.name + " appeared for the first time"
         image = person.get_montage(2, 1)
         is_success, buf = cv2.imencode(".png", image)
         bio = io.BytesIO(buf)
@@ -284,9 +283,9 @@ if __name__ == '__main__':
     pdb.load_db()
 
     fc = face_classifier.FaceClassifier(pdb, args)
-
-    vat = VisitorAlarmTelegram(fc, pdb, args)
-    vat.start_polling()
-    vat.idle()
+    vatb = VisitorAlarmTelegramBot(fc, pdb, args)
+    fc.register_observer(vatb)
+    vatb.start_polling()
+    vatb.idle()
     fc.stop_running()
 

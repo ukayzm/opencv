@@ -53,3 +53,5 @@ $ python face_clustering.py -e 0                 # video input from web cam
 <p align="center">
    <img src="jpg/ID7.montage.jpg">
 </p>
+
+Visit [https://ukayzm.github.io/face-clustering/](https://ukayzm.github.io/face-clustering/) for more information.

@@ -14,16 +14,20 @@ import traceback
 
 
 class Observer():
+    # called when Face Classifier is started
     def on_start(self, fc):
         pass
 
-    def on_stop(self, fc):
+    # called when a person appears for the first time
+    def on_new_person(self, person):
         pass
 
+    # called when the person appears again
     def on_person(self, person):
         pass
 
-    def on_new_person(self, person):
+    # called when Face Classifier is stopped
+    def on_stop(self, fc):
         pass
 
 class Observable():
@@ -36,18 +40,22 @@ class Observable():
     def remove_observer(self, observer):
         self.observers.remove(observer)
 
-    def notify_person(self, person):
-        for observer in self.observers:
-            observer.on_person(person)
-
-    def notify_new_person(self, person):
-        for observer in self.observers:
-            observer.on_new_person(person)
-
+    # notify that face classifier is started
     def notify_start(self):
         for observer in self.observers:
             observer.on_start(self)
 
+    # notify that a person appears first
+    def notify_new_person(self, person):
+        for observer in self.observers:
+            observer.on_new_person(person)
+
+    # notify that the person appears again
+    def notify_person(self, person):
+        for observer in self.observers:
+            observer.on_person(person)
+
+    # notify that face classifier is stopped
     def notify_stop(self):
         for observer in self.observers:
             observer.on_stop(self)

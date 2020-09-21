@@ -109,3 +109,4 @@ unknown_faces
    <img src="jpg/montage.unknowns-00.png">
 </p>
 
+Visit [https://ukayzm.github.io/unknown-face-classifier/](https://ukayzm.github.io/unknown-face-classifier/) for more information.
